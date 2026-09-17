@@ -1,0 +1,1160 @@
+(function () {
+  "use strict";
+
+  // ================= Domain constants =================
+  var DEFAULT_PROFILE = {
+    nom: "",
+    adresse1: "",
+    adresse2: "",
+    email: "secretariat@urps-paca-chd.fr",
+    kmRate: 0.697,
+    vehicleType: "Auto",
+    peageNiceMarseille: 42.4,
+    signatureDataUrl: null
+  };
+  var TRAJET_RATES = { none: 0, lt1h: 65, h1_2: 130, h2_6: 260 };
+  var TRAJET_LABELS = { none: "Aucun", lt1h: "< 1h", h1_2: "1-2h", h2_6: "2-6h" };
+  var FORFAIT_RATE = 276;
+  var QUOTA_MAX = 560;
+  var HOTEL_MAX = 250;
+  var REPAS_MAX = 30;
+  var MONTHS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+
+  var state = {
+    profile: Object.assign({}, DEFAULT_PROFILE),
+    expenses: [],
+    receipts: [],
+    activeTab: "saisie",
+    viewYear: new Date().getFullYear(),
+    viewMonth: new Date().getMonth() + 1,
+    recapYear: new Date().getFullYear(),
+    editingId: null,
+    draftId: null,
+    userId: null
+  };
+
+  var sb = null;             // Supabase client
+  var expensesChannel = null;
+  var receiptsChannel = null;
+  var receiptUrlCache = {};  // storage_path -> signed url (session-lived)
+
+  function genId() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "e" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
+  // ================= formatting / calculation (pure, backend-agnostic) =================
+  var fmtEUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+  function euro(n) { return fmtEUR.format(Math.round((n + Number.EPSILON) * 100) / 100); }
+  function euroPdf(n) { return euro(n).replace(/[  \s]/g, " "); }
+  function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function monthKey(y, m) { return y + "-" + String(m).padStart(2, "0"); }
+  function pad2(n) { return String(n).padStart(2, "0"); }
+  function slugify(str) {
+    return String(str || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "sans-nom";
+  }
+  function displayDate(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    if (p.length !== 3) return iso;
+    return p[2] + "/" + p[1] + "/" + p[0];
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function computeLine(l) {
+    var fraisKm = num(l.km) * num(l.kmRate);
+    var frais = num(l.transport) + fraisKm + num(l.parking) + num(l.hotel) + num(l.repas) + num(l.divers);
+    var trajetMontant = l.trajet === "none" ? 0 : num(l.trajetRate);
+    var forfaitsMontant = num(l.demiJournees) * num(l.forfaitRate) + num(l.visio) * num(l.forfaitRate);
+    var indemnites = trajetMontant + forfaitsMontant;
+    var total = frais + indemnites;
+    return {
+      fraisKm: fraisKm, frais: frais, trajetMontant: trajetMontant, forfaitsMontant: forfaitsMontant,
+      indemnites: indemnites, total: total,
+      quotaDepasse: forfaitsMontant > QUOTA_MAX,
+      hotelDepasse: num(l.hotel) > HOTEL_MAX,
+      repasDepasse: num(l.repas) > REPAS_MAX
+    };
+  }
+  function linesForMonth(y, m) {
+    var key = monthKey(y, m);
+    return state.expenses.filter(function (l) { return (l.date || "").slice(0, 7) === key; })
+      .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  }
+  function sumLines(lines) {
+    var frais = 0, indem = 0;
+    lines.forEach(function (l) { var c = computeLine(l); frais += c.frais; indem += c.indemnites; });
+    return { frais: frais, indem: indem, total: frais + indem };
+  }
+
+  function alertFallback(msg) {
+    var b = document.getElementById("storageBanner");
+    document.getElementById("storageBannerText").textContent = "⚠ " + msg;
+    b.classList.remove("hidden");
+    setTimeout(function () { b.classList.add("hidden"); }, 5000);
+  }
+
+  // ================= tabs =================
+  document.querySelectorAll(".tab").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      state.activeTab = btn.getAttribute("data-tab");
+      document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("active", b === btn); });
+      document.querySelectorAll(".tab-panel").forEach(function (p) {
+        p.classList.toggle("active", p.id === "tab-" + state.activeTab);
+      });
+    });
+  });
+
+  // ================= month / year nav =================
+  document.getElementById("prevMonth").addEventListener("click", function () { shiftMonth(-1); });
+  document.getElementById("nextMonth").addEventListener("click", function () { shiftMonth(1); });
+  function shiftMonth(delta) {
+    var d = new Date(state.viewYear, state.viewMonth - 1 + delta, 1);
+    state.viewYear = d.getFullYear();
+    state.viewMonth = d.getMonth() + 1;
+    renderSaisie();
+  }
+  document.getElementById("prevYear").addEventListener("click", function () { state.recapYear--; renderRecap(); });
+  document.getElementById("nextYear").addEventListener("click", function () { state.recapYear++; renderRecap(); });
+
+  // ================= expense form =================
+  function readForm() {
+    return {
+      date: document.getElementById("f-date").value,
+      descriptif: document.getElementById("f-desc").value.trim(),
+      transport: num(document.getElementById("f-transport").value),
+      km: num(document.getElementById("f-km").value),
+      kmRate: state.profile.kmRate,
+      parking: num(document.getElementById("f-parking").value),
+      hotel: num(document.getElementById("f-hotel").value),
+      repas: num(document.getElementById("f-repas").value),
+      divers: num(document.getElementById("f-divers").value),
+      trajet: document.getElementById("f-trajet").value,
+      trajetRate: TRAJET_RATES[document.getElementById("f-trajet").value],
+      demiJournees: num(document.getElementById("f-demi").value),
+      visio: num(document.getElementById("f-visio").value),
+      forfaitRate: FORFAIT_RATE
+    };
+  }
+  function updatePreview() {
+    var l = readForm();
+    var c = computeLine(l);
+    document.getElementById("kmPreview").textContent = "Frais km : " + euro(c.fraisKm);
+    document.getElementById("lineTotalPreview").textContent = euro(c.total);
+  }
+  ["f-transport","f-km","f-parking","f-divers","f-hotel","f-repas","f-trajet","f-demi","f-visio"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", updatePreview);
+  });
+  document.getElementById("tollShortcut").addEventListener("click", function () {
+    document.getElementById("f-parking").value = state.profile.peageNiceMarseille || DEFAULT_PROFILE.peageNiceMarseille;
+    updatePreview();
+  });
+
+  function resetForm() {
+    document.getElementById("lineForm").reset();
+    document.getElementById("f-date").value = monthKey(state.viewYear, state.viewMonth) + "-" + pad2(Math.min(new Date().getDate(), 28));
+    document.getElementById("voiceText").value = "";
+    setVoiceStatus("");
+    state.editingId = null;
+    state.draftId = genId();
+    document.getElementById("formTitle").textContent = "Nouvelle dépense";
+    document.getElementById("submitBtn").textContent = "Ajouter";
+    document.getElementById("cancelEdit").classList.add("hidden");
+    updatePreview();
+    renderReceipts();
+  }
+  document.getElementById("cancelEdit").addEventListener("click", resetForm);
+
+  document.getElementById("lineForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var l = readForm();
+    if (!l.date) { document.getElementById("f-date").focus(); return; }
+    upsertExpense(state.draftId, l).catch(function (err) {
+      alertFallback("Échec de l'enregistrement : " + (err.message || "réessaie."));
+    });
+    resetForm();
+  });
+
+  function editLine(id) {
+    var l = state.expenses.find(function (x) { return x.id === id; });
+    if (!l) return;
+    document.getElementById("f-date").value = l.date;
+    document.getElementById("f-desc").value = l.descriptif || "";
+    document.getElementById("f-transport").value = l.transport || 0;
+    document.getElementById("f-km").value = l.km || 0;
+    document.getElementById("f-parking").value = l.parking || 0;
+    document.getElementById("f-hotel").value = l.hotel || 0;
+    document.getElementById("f-repas").value = l.repas || 0;
+    document.getElementById("f-divers").value = l.divers || 0;
+    document.getElementById("f-trajet").value = l.trajet || "none";
+    document.getElementById("f-demi").value = l.demiJournees || 0;
+    document.getElementById("f-visio").value = l.visio || 0;
+    state.editingId = id;
+    state.draftId = id;
+    document.getElementById("formTitle").textContent = "Modifier la dépense";
+    document.getElementById("submitBtn").textContent = "Enregistrer";
+    document.getElementById("cancelEdit").classList.remove("hidden");
+    updatePreview();
+    renderReceipts();
+    document.getElementById("lineForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function deleteLine(id) {
+    deleteExpense(id).catch(function (err) {
+      alertFallback("Échec de la suppression : " + (err.message || "réessaie."));
+    });
+  }
+
+  // ================= voice entry =================
+  function setVoiceStatus(msg) { document.getElementById("voiceStatus").textContent = msg || ""; }
+
+  function applyParsed(o) {
+    o = o || {};
+    if (o.date && /^\d{4}-\d{2}-\d{2}$/.test(o.date)) document.getElementById("f-date").value = o.date;
+    document.getElementById("f-desc").value = o.descriptif || "";
+    document.getElementById("f-transport").value = num(o.transport);
+    document.getElementById("f-km").value = num(o.km);
+    document.getElementById("f-parking").value = num(o.parking);
+    document.getElementById("f-hotel").value = num(o.hotel);
+    document.getElementById("f-repas").value = num(o.repas);
+    document.getElementById("f-divers").value = num(o.divers);
+    document.getElementById("f-trajet").value = ["none", "lt1h", "h1_2", "h2_6"].indexOf(o.trajet) >= 0 ? o.trajet : "none";
+    document.getElementById("f-demi").value = num(o.demiJournees);
+    document.getElementById("f-visio").value = num(o.visio);
+    updatePreview();
+  }
+
+  var FR_NUMBER_WORDS = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10 };
+  function wordToNum(w) {
+    if (!w) return 0;
+    w = w.toLowerCase();
+    if (FR_NUMBER_WORDS[w] !== undefined) return FR_NUMBER_WORDS[w];
+    var n = parseInt(w, 10);
+    return isFinite(n) ? n : 0;
+  }
+
+  function localParseVoiceText(text) {
+    var lower = text.toLowerCase();
+    var out = { date: null, descriptif: text.trim(), transport: 0, km: 0, parking: 0, hotel: 0, repas: 0, divers: 0, trajet: "none", demiJournees: 0, visio: 0 };
+
+    var monthPattern = MONTHS_FR.join("|");
+    var dateRe = new RegExp("(\\d{1,2})(?:er)?\\s+(" + monthPattern + ")(?:\\s+(\\d{4}))?", "i");
+    var dm = lower.match(dateRe);
+    if (dm) {
+      var monthIdx = MONTHS_FR.indexOf(dm[2].toLowerCase());
+      var year = dm[3] ? parseInt(dm[3], 10) : new Date().getFullYear();
+      if (monthIdx >= 0) out.date = year + "-" + pad2(monthIdx + 1) + "-" + pad2(parseInt(dm[1], 10));
+    }
+
+    var moneyRe = /(\d+(?:[.,]\d+)?)\s*(?:€|euros?|eur)\b/gi;
+    var m;
+    while ((m = moneyRe.exec(lower))) {
+      var amount = parseFloat(m[1].replace(",", "."));
+      var context = lower.slice(Math.max(0, m.index - 30), m.index);
+      if (/h[oô]tel|nuit[ée]e/.test(context)) out.hotel += amount;
+      else if (/repas|d[ée]jeuner|d[iî]ner/.test(context)) out.repas += amount;
+      else if (/p[ée]age|parking/.test(context)) out.parking += amount;
+      else if (/train|taxi|avion|billet/.test(context)) out.transport += amount;
+      else out.divers += amount;
+    }
+
+    var kmM = lower.match(/(\d+)\s*(?:km|kilom[eè]tres?)\b/i);
+    if (kmM) out.km = parseInt(kmM[1], 10);
+
+    var demiM = lower.match(/(\d+|un|une|deux|trois|quatre|cinq)\s*demi[\s-]journ[ée]es?/i);
+    if (demiM) out.demiJournees = wordToNum(demiM[1]);
+    else if (/demi[\s-]journ[ée]e/i.test(lower)) out.demiJournees = 1;
+
+    var visioM = lower.match(/(\d+|un|une|deux|trois|quatre|cinq)\s*(?:r[ée]unions?\s+)?(?:en\s+)?visio(?:conf[ée]rences?)?/i);
+    if (visioM) out.visio = wordToNum(visioM[1]);
+    else if (/visio/i.test(lower)) out.visio = 1;
+
+    if (/moins d(?:'|e )une? heure|moins d'1\s*h\b/i.test(lower)) out.trajet = "lt1h";
+    else if (/1\s*(?:à|a|-)\s*2\s*h|une? à deux heures/i.test(lower)) out.trajet = "h1_2";
+    else if (/2\s*(?:à|a|-)\s*6\s*h|deux à six heures/i.test(lower)) out.trajet = "h2_6";
+
+    if (out.parking === 0 && /aller.?retour/i.test(lower) && /nice/i.test(lower) && /marseille/i.test(lower)) {
+      out.parking = state.profile.peageNiceMarseille || DEFAULT_PROFILE.peageNiceMarseille;
+    }
+    return out;
+  }
+
+  function handleParse() {
+    var text = document.getElementById("voiceText").value.trim();
+    if (!text) { setVoiceStatus("Dictez ou saisissez une phrase décrivant la dépense."); return; }
+    applyParsed(localParseVoiceText(text));
+    setVoiceStatus("Champs remplis — vérifiez puis cliquez sur Ajouter.");
+  }
+  document.getElementById("parseBtn").addEventListener("click", handleParse);
+
+  function initMic() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var micBtn = document.getElementById("micBtn");
+    if (!SR) { micBtn.classList.add("hidden"); return; }
+    var recognition = new SR();
+    recognition.lang = "fr-FR";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    var listening = false;
+    recognition.onresult = function (e) {
+      var transcript = "";
+      for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+      document.getElementById("voiceText").value = transcript;
+    };
+    recognition.onerror = function (e) {
+      listening = false; micBtn.classList.remove("listening");
+      setVoiceStatus(e.error === "not-allowed" ? "Micro refusé — autorise l'accès au micro dans les réglages du navigateur." : "Erreur d'écoute, réessayez.");
+    };
+    recognition.onend = function () {
+      listening = false; micBtn.classList.remove("listening");
+      if (document.getElementById("voiceText").value.trim()) handleParse();
+    };
+    micBtn.addEventListener("click", function () {
+      if (listening) { recognition.stop(); return; }
+      try {
+        document.getElementById("voiceText").value = "";
+        recognition.start();
+        listening = true;
+        micBtn.classList.add("listening");
+        setVoiceStatus("Je vous écoute…");
+      } catch (err) { setVoiceStatus("Impossible de démarrer l'écoute."); }
+    });
+  }
+
+  // ================= receipts (Supabase Storage) =================
+  function receiptsFor(expenseId) {
+    return state.receipts.filter(function (r) { return r.expenseId === expenseId; });
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("Lecture du fichier impossible.")); };
+      reader.onload = function () { resolve(reader.result); };
+      reader.readAsDataURL(file);
+    });
+  }
+  function resizeImageDataUrl(sourceDataUrl, maxDim, quality) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onerror = function () { reject(new Error("Image illisible.")); };
+      img.onload = function () {
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL("image/jpeg", quality), width: w, height: h });
+      };
+      img.src = sourceDataUrl;
+    });
+  }
+  function dataUrlToBlob(dataUrl) {
+    var parts = dataUrl.split(",");
+    var mime = parts[0].match(/:(.*?);/)[1];
+    var bin = atob(parts[1]);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  }
+
+  async function prepareReceiptUpload(file) {
+    if (file.type === "application/pdf") {
+      return { blob: file, mimeType: "application/pdf", width: 0, height: 0, ext: "pdf" };
+    }
+    var rawDataUrl = await readFileAsDataUrl(file);
+    var resized = await resizeImageDataUrl(rawDataUrl, 2000, 0.85);
+    return { blob: dataUrlToBlob(resized.dataUrl), mimeType: "image/jpeg", width: resized.width, height: resized.height, ext: "jpg" };
+  }
+
+  function renderReceipts() {
+    var list = document.getElementById("receiptList");
+    var items = receiptsFor(state.draftId);
+    list.innerHTML = "";
+    items.forEach(function (r) {
+      var chip = document.createElement("div");
+      chip.className = "receipt-chip";
+      chip.title = r.filename || "Justificatif";
+      if (r.mimeType === "application/pdf") {
+        chip.innerHTML = '<span class="receipt-pdf-icon">📄</span><button type="button" class="receipt-remove" data-remove-receipt="' + r.id + '">✕</button>';
+      } else {
+        var img = document.createElement("img");
+        getReceiptUrl(r).then(function (url) { img.src = url; });
+        chip.appendChild(img);
+        var rm = document.createElement("button");
+        rm.type = "button"; rm.className = "receipt-remove"; rm.setAttribute("data-remove-receipt", r.id); rm.textContent = "✕";
+        chip.appendChild(rm);
+      }
+      chip.addEventListener("click", function (e) {
+        if (e.target.closest("[data-remove-receipt]")) return;
+        openLightbox(r);
+      });
+      list.appendChild(chip);
+    });
+    list.querySelectorAll("[data-remove-receipt]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        removeReceipt(btn.getAttribute("data-remove-receipt"));
+      });
+    });
+  }
+
+  async function getReceiptUrl(r) {
+    if (receiptUrlCache[r.storagePath]) return receiptUrlCache[r.storagePath];
+    var { data, error } = await sb.storage.from("receipts").createSignedUrl(r.storagePath, 3600);
+    if (error) throw error;
+    receiptUrlCache[r.storagePath] = data.signedUrl;
+    return data.signedUrl;
+  }
+
+  async function openLightbox(r) {
+    var content = document.getElementById("lightboxContent");
+    content.innerHTML = "Chargement…";
+    document.getElementById("lightbox").classList.remove("hidden");
+    try {
+      var url = await getReceiptUrl(r);
+      if (r.mimeType === "application/pdf") {
+        content.innerHTML = '<iframe src="' + url + '" title="' + escapeHtml(r.filename || "Justificatif") + '"></iframe>';
+      } else {
+        content.innerHTML = '<img src="' + url + '" alt="' + escapeHtml(r.filename || "Justificatif") + '">';
+      }
+    } catch (err) {
+      content.innerHTML = "Impossible de charger ce fichier.";
+    }
+  }
+  function closeLightbox() {
+    document.getElementById("lightbox").classList.add("hidden");
+    document.getElementById("lightboxContent").innerHTML = "";
+  }
+  document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
+  document.getElementById("lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
+
+  document.getElementById("btnAttach").addEventListener("click", function () { document.getElementById("attachInput").click(); });
+  document.getElementById("attachInput").addEventListener("change", function (e) {
+    var files = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = "";
+    var status = document.getElementById("receiptStatus");
+    files.reduce(function (chain, file) {
+      return chain.then(async function () {
+        status.textContent = "Envoi de " + file.name + "…";
+        try {
+          var prepped = await prepareReceiptUpload(file);
+          var path = state.userId + "/" + state.draftId + "/" + genId() + "." + prepped.ext;
+          var up = await sb.storage.from("receipts").upload(path, prepped.blob, { contentType: prepped.mimeType });
+          if (up.error) throw up.error;
+          var row = {
+            user_id: state.userId, expense_id: state.draftId, filename: file.name,
+            storage_path: path, mime_type: prepped.mimeType, width: prepped.width, height: prepped.height
+          };
+          var ins = await sb.from("receipts").insert(row);
+          if (ins.error) throw ins.error;
+          status.textContent = "";
+        } catch (err) {
+          status.textContent = "Échec de l'ajout de " + file.name + " : " + (err.message || "réessaie.");
+        }
+      });
+    }, Promise.resolve());
+  });
+
+  async function removeReceipt(id) {
+    var r = state.receipts.find(function (x) { return x.id === id; });
+    if (!r) return;
+    try {
+      await sb.storage.from("receipts").remove([r.storagePath]);
+      await sb.from("receipts").delete().eq("id", id);
+    } catch (err) {
+      alertFallback("Échec de la suppression du justificatif : " + (err.message || "réessaie."));
+    }
+  }
+  async function removeReceiptsFor(expenseId) {
+    var items = receiptsFor(expenseId);
+    if (!items.length) return;
+    try {
+      await sb.storage.from("receipts").remove(items.map(function (r) { return r.storagePath; }));
+      await sb.from("receipts").delete().eq("expense_id", expenseId);
+    } catch (err) { /* best effort */ }
+  }
+
+  // ================= rendering: Saisie =================
+  function renderSaisie() {
+    var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
+    document.getElementById("monthLabel").textContent = label;
+    document.getElementById("tableMonthTitle").textContent = "Dépenses — " + label;
+
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var sums = sumLines(lines);
+    document.getElementById("statFrais").textContent = euro(sums.frais);
+    document.getElementById("statIndem").textContent = euro(sums.indem);
+    document.getElementById("statTotal").textContent = euro(sums.total);
+
+    var warnings = [];
+    lines.forEach(function (l) {
+      var c = computeLine(l);
+      if (c.quotaDepasse) warnings.push("Quota d'indemnités dépassé le " + displayDate(l.date) + " (> " + euro(QUOTA_MAX) + ")");
+      if (c.hotelDepasse) warnings.push("Plafond hôtel dépassé le " + displayDate(l.date));
+      if (c.repasDepasse) warnings.push("Plafond repas dépassé le " + displayDate(l.date));
+    });
+    var warnBanner = document.getElementById("monthWarnBanner");
+    if (warnings.length) {
+      warnBanner.innerHTML = "<span><strong>" + warnings.length + " alerte(s) : </strong>" + warnings.join(" · ") + "</span>";
+      warnBanner.classList.remove("hidden");
+    } else warnBanner.classList.add("hidden");
+
+    var tbody = document.getElementById("linesTbody");
+    var tfoot = document.getElementById("linesTfoot");
+    var cards = document.getElementById("lineCards");
+    tbody.innerHTML = ""; cards.innerHTML = "";
+
+    if (!lines.length) {
+      tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Aucune dépense saisie pour ce mois.</td></tr>';
+      tfoot.innerHTML = "";
+    } else {
+      lines.forEach(function (l) {
+        var c = computeLine(l);
+        var receiptCount = receiptsFor(l.id).length;
+        var receiptBadge = receiptCount ? '<button type="button" class="row-receipt-badge" data-edit="' + l.id + '">📎 ' + receiptCount + '</button>' : "";
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + displayDate(l.date) + "</td>" +
+          '<td class="wrap">' + escapeHtml(l.descriptif || "—") + "</td>" +
+          '<td class="num">' + euro(l.transport) + "</td>" +
+          '<td class="num">' + (l.km || 0) + "</td>" +
+          '<td class="num">' + euro(c.fraisKm) + "</td>" +
+          '<td class="num">' + euro(l.parking) + "</td>" +
+          '<td class="num">' + euro(l.hotel) + (c.hotelDepasse ? '<div class="pill pill-warn">Plafond</div>' : "") + "</td>" +
+          '<td class="num">' + euro(l.repas) + (c.repasDepasse ? '<div class="pill pill-warn">Plafond</div>' : "") + "</td>" +
+          '<td class="num">' + euro(l.divers) + "</td>" +
+          "<td>" + TRAJET_LABELS[l.trajet || "none"] + "</td>" +
+          '<td class="num">' + (l.demiJournees || 0) + "</td>" +
+          '<td class="num">' + (l.visio || 0) + "</td>" +
+          '<td class="num">' + euro(c.indemnites) + (c.quotaDepasse ? '<div class="pill pill-warn">Quota</div>' : "") + "</td>" +
+          '<td class="num">' + euro(c.total) + "</td>" +
+          '<td><div class="row-actions">' + receiptBadge +
+            '<button class="btn btn-small" data-edit="' + l.id + '">✎</button>' +
+            '<button class="btn btn-small btn-danger" data-del="' + l.id + '">✕</button>' +
+          "</div></td>";
+        tbody.appendChild(tr);
+
+        var card = document.createElement("div");
+        card.className = "line-card";
+        card.innerHTML =
+          '<div class="line-card-top"><span class="line-card-date">' + displayDate(l.date) + '</span><span class="line-card-total">' + euro(c.total) + "</span></div>" +
+          '<div class="line-card-desc">' + escapeHtml(l.descriptif || "—") + "</div>" +
+          '<div class="line-card-grid">' +
+            '<div><span class="lbl">Frais </span>' + euro(c.frais) + "</div>" +
+            '<div><span class="lbl">Indemnités </span>' + euro(c.indemnites) + "</div>" +
+          "</div>" +
+          '<div class="row-actions" style="margin-top:8px;">' + receiptBadge +
+            '<button class="btn btn-small" data-edit="' + l.id + '">Modifier</button>' +
+            '<button class="btn btn-small btn-danger" data-del="' + l.id + '">Supprimer</button>' +
+          "</div>";
+        cards.appendChild(card);
+      });
+      tfoot.innerHTML =
+        '<tr><td colspan="4">Totaux</td>' +
+        '<td class="num">' + euro(lines.reduce(function (s, l) { return s + computeLine(l).fraisKm; }, 0)) + "</td>" +
+        '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.parking); }, 0)) + "</td>" +
+        '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.hotel); }, 0)) + "</td>" +
+        '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.repas); }, 0)) + "</td>" +
+        '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.divers); }, 0)) + "</td>" +
+        "<td></td>" +
+        '<td class="num">' + lines.reduce(function (s, l) { return s + num(l.demiJournees); }, 0) + "</td>" +
+        '<td class="num">' + lines.reduce(function (s, l) { return s + num(l.visio); }, 0) + "</td>" +
+        '<td class="num">' + euro(sums.indem) + "</td>" +
+        '<td class="num">' + euro(sums.total) + "</td>" +
+        "<td></td></tr>";
+    }
+    tbody.querySelectorAll("[data-edit]").forEach(function (b) { b.addEventListener("click", function () { editLine(b.getAttribute("data-edit")); }); });
+    tbody.querySelectorAll("[data-del]").forEach(function (b) { b.addEventListener("click", function () { deleteLine(b.getAttribute("data-del")); }); });
+    cards.querySelectorAll("[data-edit]").forEach(function (b) { b.addEventListener("click", function () { editLine(b.getAttribute("data-edit")); }); });
+    cards.querySelectorAll("[data-del]").forEach(function (b) { b.addEventListener("click", function () { deleteLine(b.getAttribute("data-del")); }); });
+  }
+
+  // ================= rendering: Récapitulatif =================
+  function renderRecap() {
+    document.getElementById("yearLabel").textContent = state.recapYear;
+    var tbody = document.getElementById("recapTbody");
+    tbody.innerHTML = "";
+    var yearTotal = { frais: 0, indem: 0, total: 0 };
+    var monthly = [];
+    for (var m = 1; m <= 12; m++) {
+      var s = sumLines(linesForMonth(state.recapYear, m));
+      monthly.push(s);
+      yearTotal.frais += s.frais; yearTotal.indem += s.indem; yearTotal.total += s.total;
+    }
+    var maxTotal = Math.max.apply(null, monthly.map(function (s) { return s.total; }).concat([1]));
+    monthly.forEach(function (s, i) {
+      var tr = document.createElement("tr");
+      var pct = Math.round((s.total / maxTotal) * 100);
+      tr.innerHTML =
+        "<td style='text-transform:capitalize;'>" + MONTHS_FR[i] + "</td>" +
+        '<td class="num">' + euro(s.indem) + "</td>" +
+        '<td class="num">' + euro(s.frais) + "</td>" +
+        '<td class="num">' + euro(s.total) + "</td>" +
+        '<td class="recap-bar-cell"><div class="recap-bar-track"><div class="recap-bar-fill" style="width:' + pct + '%"></div></div></td>';
+      tbody.appendChild(tr);
+    });
+    var totalTr = document.createElement("tr");
+    totalTr.className = "recap-total";
+    totalTr.innerHTML = "<td>Année</td><td class='num'>" + euro(yearTotal.indem) + "</td><td class='num'>" + euro(yearTotal.frais) + "</td><td class='num'>" + euro(yearTotal.total) + "</td><td></td>";
+    tbody.appendChild(totalTr);
+
+    document.getElementById("yearStatFrais").textContent = euro(yearTotal.frais);
+    document.getElementById("yearStatIndem").textContent = euro(yearTotal.indem);
+    document.getElementById("yearStatTotal").textContent = euro(yearTotal.total);
+  }
+
+  // ================= profile (incl. signature) =================
+  function renderProfile() {
+    document.getElementById("p-nom").value = state.profile.nom;
+    document.getElementById("p-adresse1").value = state.profile.adresse1;
+    document.getElementById("p-adresse2").value = state.profile.adresse2;
+    document.getElementById("p-email").value = state.profile.email;
+    document.getElementById("p-vehicule").value = state.profile.vehicleType;
+    document.getElementById("p-kmrate").value = state.profile.kmRate;
+    document.getElementById("p-peage").value = state.profile.peageNiceMarseille;
+    var img = document.getElementById("sigPreview");
+    var removeBtn = document.getElementById("btnSigRemove");
+    if (state.profile.signatureDataUrl) {
+      img.src = state.profile.signatureDataUrl; img.classList.remove("hidden");
+      removeBtn.classList.remove("hidden");
+    } else {
+      img.classList.add("hidden"); img.src = "";
+      removeBtn.classList.add("hidden");
+    }
+  }
+  document.getElementById("btnSigUpload").addEventListener("click", function () { document.getElementById("sigInput").click(); });
+  document.getElementById("sigInput").addEventListener("change", async function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      var rawDataUrl = await readFileAsDataUrl(file);
+      var resized = await resizeImageDataUrl(rawDataUrl, 600, 0.85);
+      state.profile.signatureDataUrl = resized.dataUrl;
+      renderProfile();
+    } catch (err) {
+      alertFallback("Impossible de lire cette image, réessaie.");
+    }
+  });
+  document.getElementById("btnSigRemove").addEventListener("click", function () {
+    state.profile.signatureDataUrl = null;
+    renderProfile();
+  });
+
+  document.getElementById("profileForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var p = {
+      nom: document.getElementById("p-nom").value.trim(),
+      adresse1: document.getElementById("p-adresse1").value.trim(),
+      adresse2: document.getElementById("p-adresse2").value.trim(),
+      email: document.getElementById("p-email").value.trim() || DEFAULT_PROFILE.email,
+      vehicleType: document.getElementById("p-vehicule").value,
+      kmRate: num(document.getElementById("p-kmrate").value) || DEFAULT_PROFILE.kmRate,
+      peageNiceMarseille: num(document.getElementById("p-peage").value) || 0,
+      signatureDataUrl: state.profile.signatureDataUrl || null
+    };
+    state.profile = p;
+    saveProfile(p).then(function () {
+      var saved = document.getElementById("profileSaved");
+      saved.classList.remove("hidden");
+      setTimeout(function () { saved.classList.add("hidden"); }, 2000);
+    }).catch(function (err) {
+      alertFallback("Échec de l'enregistrement du profil : " + (err.message || "réessaie."));
+    });
+  });
+
+  // ================= PDF export =================
+  var ACCENT_RGB = [47, 93, 80];
+
+  function pdfHeader(doc, margin, title) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(20);
+    doc.text(title, margin, 18);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(90);
+    doc.text("URPS Chirurgiens-Dentistes PACA", margin, 24);
+    doc.setTextColor(20);
+  }
+  function pdfIdentityBlock(doc, margin, startY) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(20);
+    var y = startY;
+    [state.profile.nom, state.profile.adresse1, state.profile.adresse2, "Adressé à : " + state.profile.email].forEach(function (t) {
+      doc.text(t, margin, y);
+      y += 5;
+    });
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8.5);
+    doc.setTextColor(90);
+    doc.text("Merci de joindre les justificatifs au format PDF.", margin, y + 1);
+    doc.setTextColor(20);
+    doc.setFont("helvetica", "normal");
+    return y + 9;
+  }
+  function pdfSignatureBlock(doc, margin, pageWidth, y) {
+    var pageHeight = doc.internal.pageSize.getHeight();
+    if (y > pageHeight - 55) { doc.addPage(); y = 25; }
+    var today = new Date();
+    var todayStr = pad2(today.getDate()) + "/" + pad2(today.getMonth() + 1) + "/" + today.getFullYear();
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(20);
+    doc.text("Fait le " + todayStr, margin, y + 22);
+    doc.setDrawColor(160);
+    doc.line(margin, y + 24, margin + 65, y + 24);
+
+    if (state.profile.signatureDataUrl) {
+      var img = new Image();
+      // synchronous-ish: jsPDF addImage needs dimensions; we precomputed none here so use a safe default box.
+      var sigW = 42, sigH = 18;
+      try {
+        var sigX = pageWidth - margin - sigW;
+        doc.addImage(state.profile.signatureDataUrl, sigX, y, sigW, sigH);
+      } catch (e) { /* unsupported format, skip image */ }
+    }
+    var sigX2 = pageWidth - margin - 42;
+    doc.setDrawColor(160);
+    doc.line(sigX2, y + 22, pageWidth - margin, y + 22);
+    doc.text("Signature", sigX2, y + 27);
+  }
+  async function pdfReceiptsAppendix(doc, margin, pageWidth, lines) {
+    var pageHeight = doc.internal.pageSize.getHeight();
+    for (var li = 0; li < lines.length; li++) {
+      var l = lines[li];
+      var items = receiptsFor(l.id);
+      for (var ri = 0; ri < items.length; ri++) {
+        var r = items[ri];
+        doc.addPage();
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.setTextColor(20);
+        doc.text(displayDate(l.date) + " — " + (l.descriptif || "Justificatif"), margin, 16);
+        doc.setFont("helvetica", "normal");
+        if (r.mimeType === "application/pdf") {
+          doc.setFontSize(10);
+          doc.text("Justificatif PDF : " + (r.filename || "document.pdf") + " (à joindre séparément à l'envoi)", margin, 26);
+          continue;
+        }
+        try {
+          var url = await getReceiptUrl(r);
+          var resp = await fetch(url);
+          var blob = await resp.blob();
+          var dataUrl = await new Promise(function (resolve, reject) {
+            var fr = new FileReader();
+            fr.onload = function () { resolve(fr.result); };
+            fr.onerror = reject;
+            fr.readAsDataURL(blob);
+          });
+          var maxW = pageWidth - margin * 2;
+          var maxH = pageHeight - 30;
+          var rw = r.width || maxW, rh = r.height || maxH;
+          var ratio = Math.min(maxW / rw, maxH / rh, 1);
+          doc.addImage(dataUrl, "JPEG", margin, 22, rw * ratio, rh * ratio);
+        } catch (err) {
+          doc.setFontSize(10);
+          doc.text("(justificatif indisponible : " + (r.filename || "") + ")", margin, 26);
+        }
+      }
+    }
+  }
+
+  async function buildNoteDoc(lines, sums, titleLine) {
+    var doc = new window.jspdf.jsPDF();
+    var margin = 14;
+    var pageWidth = doc.internal.pageSize.getWidth();
+    pdfHeader(doc, margin, titleLine);
+    var y = pdfIdentityBlock(doc, margin, 32);
+
+    var head = [["Date", "Descriptif", "Transport", "Km", "Frais km", "Parking", "Hôtel", "Repas", "Divers", "Trajet", "1/2j", "Visio", "Indemnités", "Total"]];
+    var body = lines.map(function (l) {
+      var c = computeLine(l);
+      return [displayDate(l.date), l.descriptif || "", euroPdf(l.transport), String(l.km || 0), euroPdf(c.fraisKm), euroPdf(l.parking), euroPdf(l.hotel), euroPdf(l.repas), euroPdf(l.divers), TRAJET_LABELS[l.trajet || "none"], String(l.demiJournees || 0), String(l.visio || 0), euroPdf(c.indemnites), euroPdf(c.total)];
+    });
+    doc.autoTable({
+      head: head, body: body, startY: y,
+      styles: { fontSize: 6.5, cellPadding: 1.4, textColor: 20 },
+      headStyles: { fillColor: ACCENT_RGB, textColor: 255, fontStyle: "bold" },
+      columnStyles: {
+        2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" },
+        6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" }, 10: { halign: "right" },
+        11: { halign: "right" }, 12: { halign: "right" }, 13: { halign: "right" }
+      },
+      margin: { left: margin, right: margin, top: 30 }
+    });
+
+    var pageHeight = doc.internal.pageSize.getHeight();
+    var afterY = doc.lastAutoTable.finalY + 10;
+    if (afterY > pageHeight - 40) { doc.addPage(); afterY = 20; }
+    var labelX = pageWidth - margin - 75;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(20);
+    doc.text("Total frais", labelX, afterY);
+    doc.text(euroPdf(sums.frais), pageWidth - margin, afterY, { align: "right" });
+    doc.text("Total indemnités", labelX, afterY + 6);
+    doc.text(euroPdf(sums.indem), pageWidth - margin, afterY + 6, { align: "right" });
+    doc.setDrawColor(20);
+    doc.line(labelX, afterY + 9, pageWidth - margin, afterY + 9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Dépenses totales", labelX, afterY + 15);
+    doc.text(euroPdf(sums.total), pageWidth - margin, afterY + 15, { align: "right" });
+    doc.setFont("helvetica", "normal");
+
+    pdfSignatureBlock(doc, margin, pageWidth, afterY + 22);
+    await pdfReceiptsAppendix(doc, margin, pageWidth, lines);
+    return doc;
+  }
+
+  function buildRecapDoc(year, titleLine) {
+    var doc = new window.jspdf.jsPDF();
+    var margin = 14;
+    var pageWidth = doc.internal.pageSize.getWidth();
+    pdfHeader(doc, margin, titleLine);
+    var y = pdfIdentityBlock(doc, margin, 32);
+
+    var yearTotal = { indem: 0, frais: 0, total: 0 };
+    var body = [];
+    for (var m = 1; m <= 12; m++) {
+      var s = sumLines(linesForMonth(year, m));
+      yearTotal.indem += s.indem; yearTotal.frais += s.frais; yearTotal.total += s.total;
+      body.push([MONTHS_FR[m - 1], euroPdf(s.indem), euroPdf(s.frais), euroPdf(s.total)]);
+    }
+    doc.autoTable({
+      head: [["Mois", "Indemnités", "Frais", "Total"]], body: body, startY: y,
+      styles: { fontSize: 9, cellPadding: 2.2, textColor: 20 },
+      headStyles: { fillColor: ACCENT_RGB, textColor: 255, fontStyle: "bold" },
+      columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+      margin: { left: margin, right: margin, top: 30 }
+    });
+
+    var afterY = doc.lastAutoTable.finalY + 10;
+    var labelX = pageWidth - margin - 75;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(20);
+    doc.text("Total " + year, labelX, afterY);
+    doc.text(euroPdf(yearTotal.total), pageWidth - margin, afterY, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("dont indemnités", labelX, afterY + 7);
+    doc.text(euroPdf(yearTotal.indem), pageWidth - margin, afterY + 7, { align: "right" });
+    doc.text("dont frais", labelX, afterY + 13);
+    doc.text(euroPdf(yearTotal.frais), pageWidth - margin, afterY + 13, { align: "right" });
+
+    pdfSignatureBlock(doc, margin, pageWidth, afterY + 22);
+    return doc;
+  }
+
+  document.getElementById("btnPrintMonth").addEventListener("click", async function () {
+    var btn = this; var oldText = btn.textContent;
+    btn.textContent = "Génération…"; btn.disabled = true;
+    try {
+      var lines = linesForMonth(state.viewYear, state.viewMonth);
+      var sums = sumLines(lines);
+      var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
+      var doc = await buildNoteDoc(lines, sums, "Note de frais — " + state.profile.nom + " — " + label);
+      doc.save("note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".pdf");
+    } catch (err) {
+      alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
+    } finally {
+      btn.textContent = oldText; btn.disabled = false;
+    }
+  });
+
+  document.getElementById("btnPrintYear").addEventListener("click", function () {
+    var doc = buildRecapDoc(state.recapYear, "Récapitulatif annuel — " + state.profile.nom + " — " + state.recapYear);
+    doc.save("recapitulatif-" + slugify(state.profile.nom) + "-" + state.recapYear + ".pdf");
+  });
+
+  // ================= CSV export =================
+  function csvEscape(v) { v = String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function saveCsv(filename, rows) {
+    var csv = "﻿" + rows.map(function (r) { return r.map(csvEscape).join(";"); }).join("\r\n");
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+
+  document.getElementById("btnCsvMonth").addEventListener("click", function () {
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
+    var header = ["Date","Descriptif","Transport","Km","Frais km","Parking","Hôtel","Repas","Divers","Trajet","1/2j présentiel","Visio","Indemnités","Total"];
+    var rows = [["Note de frais", state.profile.nom, label], [], header];
+    lines.forEach(function (l) {
+      var c = computeLine(l);
+      rows.push([l.date, l.descriptif || "", l.transport, l.km, c.fraisKm.toFixed(2), l.parking, l.hotel, l.repas, l.divers, TRAJET_LABELS[l.trajet || "none"], l.demiJournees, l.visio, c.indemnites.toFixed(2), c.total.toFixed(2)]);
+    });
+    saveCsv("note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".csv", rows);
+  });
+
+  document.getElementById("btnCsvYear").addEventListener("click", function () {
+    var y = state.recapYear;
+    var rows = [["Récapitulatif annuel", state.profile.nom, y], [], ["Mois","Indemnités","Frais","Total"]];
+    for (var m = 1; m <= 12; m++) {
+      var s = sumLines(linesForMonth(y, m));
+      rows.push([MONTHS_FR[m - 1], s.indem.toFixed(2), s.frais.toFixed(2), s.total.toFixed(2)]);
+    }
+    saveCsv("recapitulatif-" + slugify(state.profile.nom) + "-" + y + ".csv", rows);
+  });
+
+  // ================= email (copy-to-clipboard flow) =================
+  function selectReadonlyField(el) { el.focus(); el.select(); }
+  ["emailTo", "emailSubject", "emailBody"].forEach(function (id) {
+    document.getElementById(id).addEventListener("click", function () { selectReadonlyField(this); });
+  });
+
+  document.getElementById("btnEmailMonth").addEventListener("click", function () {
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var sums = sumLines(lines);
+    var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
+    var subject = "Note de frais - " + label + " - " + state.profile.nom;
+    var body = "Bonjour,\n\nVeuillez trouver ci-joint ma note de frais pour " + label + " (PDF téléchargé via le bouton \"Télécharger en PDF\").\n\n" +
+      "Total frais : " + euro(sums.frais) + "\nTotal indemnités : " + euro(sums.indem) + "\nDépenses totales : " + euro(sums.total) +
+      "\n\nCordialement,\n" + state.profile.nom;
+
+    document.getElementById("emailTo").value = state.profile.email;
+    document.getElementById("emailSubject").value = subject;
+    document.getElementById("emailBody").value = body;
+    var panel = document.getElementById("emailPanel");
+    panel.classList.remove("hidden");
+    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+    try {
+      var a = document.createElement("a");
+      a.href = "mailto:" + state.profile.email + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) {}
+  });
+
+  document.getElementById("btnCopyEmail").addEventListener("click", function () {
+    var text = "À : " + document.getElementById("emailTo").value + "\nObjet : " + document.getElementById("emailSubject").value + "\n\n" + document.getElementById("emailBody").value;
+    var status = document.getElementById("emailStatus");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        status.textContent = "Copié ✓ — colle-le (Cmd/Ctrl+V) dans un nouveau mail à " + document.getElementById("emailTo").value + ".";
+      }).catch(function () {
+        selectReadonlyField(document.getElementById("emailBody"));
+        status.textContent = "Copie automatique impossible — le message est sélectionné, copie-le avec Cmd/Ctrl+C.";
+      });
+    } else {
+      selectReadonlyField(document.getElementById("emailBody"));
+      status.textContent = "Le message est sélectionné — copie-le avec Cmd/Ctrl+C.";
+    }
+  });
+
+  // ================= Supabase: data layer =================
+  function rowToExpense(row) {
+    return {
+      id: row.id, date: row.date, descriptif: row.descriptif,
+      transport: row.transport, km: row.km, kmRate: row.km_rate,
+      parking: row.parking, hotel: row.hotel, repas: row.repas, divers: row.divers,
+      trajet: row.trajet, trajetRate: row.trajet_rate,
+      demiJournees: row.demi_journees, visio: row.visio, forfaitRate: row.forfait_rate
+    };
+  }
+  function expenseToRow(id, l) {
+    return {
+      id: id, user_id: state.userId, date: l.date, descriptif: l.descriptif,
+      transport: l.transport, km: l.km, km_rate: l.kmRate,
+      parking: l.parking, hotel: l.hotel, repas: l.repas, divers: l.divers,
+      trajet: l.trajet, trajet_rate: l.trajetRate,
+      demi_journees: l.demiJournees, visio: l.visio, forfait_rate: l.forfaitRate
+    };
+  }
+  function rowToReceipt(row) {
+    return {
+      id: row.id, expenseId: row.expense_id, filename: row.filename,
+      storagePath: row.storage_path, mimeType: row.mime_type, width: row.width, height: row.height
+    };
+  }
+  function rowToProfile(row) {
+    if (!row) return Object.assign({}, DEFAULT_PROFILE);
+    return {
+      nom: row.nom || "", adresse1: row.adresse1 || "", adresse2: row.adresse2 || "",
+      email: row.email || DEFAULT_PROFILE.email, kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
+      vehicleType: row.vehicle_type || "Auto", peageNiceMarseille: row.peage_nice_marseille || DEFAULT_PROFILE.peageNiceMarseille,
+      signatureDataUrl: row.signature_data_url || null
+    };
+  }
+
+  async function upsertExpense(id, l) {
+    var row = expenseToRow(id, l);
+    var res = await sb.from("expenses").upsert(row);
+    if (res.error) throw res.error;
+    await refreshExpenses();
+  }
+  async function deleteExpense(id) {
+    await removeReceiptsFor(id);
+    var res = await sb.from("expenses").delete().eq("id", id);
+    if (res.error) throw res.error;
+    await refreshExpenses();
+  }
+  async function refreshExpenses() {
+    var res = await sb.from("expenses").select("*").eq("user_id", state.userId).order("date", { ascending: false });
+    if (res.error) { alertFallback("Erreur de chargement des dépenses."); return; }
+    state.expenses = res.data.map(rowToExpense);
+    renderSaisie(); renderRecap();
+  }
+  async function refreshReceipts() {
+    var res = await sb.from("receipts").select("*").eq("user_id", state.userId);
+    if (res.error) { alertFallback("Erreur de chargement des justificatifs."); return; }
+    state.receipts = res.data.map(rowToReceipt);
+    renderReceipts(); renderSaisie();
+  }
+  async function saveProfile(p) {
+    var row = {
+      id: state.userId, nom: p.nom, adresse1: p.adresse1, adresse2: p.adresse2, email: p.email,
+      km_rate: p.kmRate, vehicle_type: p.vehicleType, peage_nice_marseille: p.peageNiceMarseille,
+      signature_data_url: p.signatureDataUrl, updated_at: new Date().toISOString()
+    };
+    var res = await sb.from("profiles").upsert(row);
+    if (res.error) throw res.error;
+  }
+  async function loadProfile() {
+    var res = await sb.from("profiles").select("*").eq("id", state.userId).maybeSingle();
+    if (res.error) { alertFallback("Erreur de chargement du profil."); return; }
+    state.profile = rowToProfile(res.data);
+    renderProfile();
+  }
+
+  function subscribeRealtime() {
+    if (expensesChannel) sb.removeChannel(expensesChannel);
+    if (receiptsChannel) sb.removeChannel(receiptsChannel);
+    expensesChannel = sb.channel("expenses-" + state.userId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "expenses", filter: "user_id=eq." + state.userId }, function () { refreshExpenses(); })
+      .subscribe();
+    receiptsChannel = sb.channel("receipts-" + state.userId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "receipts", filter: "user_id=eq." + state.userId }, function () { refreshReceipts(); })
+      .subscribe();
+  }
+
+  // ================= auth =================
+  var authMode = "login";
+  function setAuthMode(mode) {
+    authMode = mode;
+    document.getElementById("authTabLogin").classList.toggle("active", mode === "login");
+    document.getElementById("authTabSignup").classList.toggle("active", mode === "signup");
+    document.getElementById("authSubmit").textContent = mode === "login" ? "Se connecter" : "Créer mon compte";
+    hideAuthMessages();
+  }
+  document.getElementById("authTabLogin").addEventListener("click", function () { setAuthMode("login"); });
+  document.getElementById("authTabSignup").addEventListener("click", function () { setAuthMode("signup"); });
+
+  function hideAuthMessages() {
+    document.getElementById("authError").classList.add("hidden");
+    document.getElementById("authInfo").classList.add("hidden");
+  }
+  function showAuthError(msg) {
+    var el = document.getElementById("authError");
+    el.textContent = msg; el.classList.remove("hidden");
+    document.getElementById("authInfo").classList.add("hidden");
+  }
+  function showAuthInfo(msg) {
+    var el = document.getElementById("authInfo");
+    el.textContent = msg; el.classList.remove("hidden");
+    document.getElementById("authError").classList.add("hidden");
+  }
+
+  document.getElementById("authForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    hideAuthMessages();
+    var email = document.getElementById("auth-email").value.trim();
+    var password = document.getElementById("auth-password").value;
+    var btn = document.getElementById("authSubmit");
+    btn.disabled = true;
+    try {
+      if (authMode === "signup") {
+        var res = await sb.auth.signUp({ email: email, password: password });
+        if (res.error) throw res.error;
+        if (res.data.session) { /* auto-logged in, onAuthStateChange handles it */ }
+        else showAuthInfo("Compte créé — vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.");
+      } else {
+        var res2 = await sb.auth.signInWithPassword({ email: email, password: password });
+        if (res2.error) throw res2.error;
+      }
+    } catch (err) {
+      showAuthError(err.message === "Invalid login credentials" ? "Email ou mot de passe incorrect." : (err.message || "Erreur, réessaie."));
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById("authForgot").addEventListener("click", async function (e) {
+    e.preventDefault();
+    hideAuthMessages();
+    var email = document.getElementById("auth-email").value.trim();
+    if (!email) { showAuthError("Saisis ton email ci-dessus puis clique à nouveau sur ce lien."); return; }
+    try {
+      var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+      if (res.error) throw res.error;
+      showAuthInfo("Email de réinitialisation envoyé si ce compte existe.");
+    } catch (err) {
+      showAuthError(err.message || "Erreur, réessaie.");
+    }
+  });
+
+  document.getElementById("btnLogout").addEventListener("click", function () {
+    sb.auth.signOut();
+  });
+
+  function showAuthScreen() {
+    document.getElementById("authScreen").classList.remove("hidden");
+    document.getElementById("appScreen").classList.add("hidden");
+  }
+  async function showAppScreen(user) {
+    state.userId = user.id;
+    document.getElementById("userEmail").textContent = user.email;
+    document.getElementById("authScreen").classList.add("hidden");
+    document.getElementById("appScreen").classList.remove("hidden");
+    resetForm();
+    await loadProfile();
+    await refreshExpenses();
+    await refreshReceipts();
+    subscribeRealtime();
+  }
+
+  // ================= init =================
+  function init() {
+    renderSaisie();
+    renderRecap();
+    renderProfile();
+    initMic();
+
+    if (!window.SUPABASE_URL || !window.supabase || window.SUPABASE_URL.indexOf("xxxx") >= 0) {
+      showAuthError("Configuration manquante : édite config.js avec l'URL et la clé Supabase du projet.");
+      return;
+    }
+    sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+    sb.auth.onAuthStateChange(function (event, session) {
+      if (session && session.user) showAppScreen(session.user);
+      else showAuthScreen();
+    });
+    sb.auth.getSession().then(function (res) {
+      if (res.data.session && res.data.session.user) showAppScreen(res.data.session.user);
+      else showAuthScreen();
+    });
+  }
+  init();
+})();

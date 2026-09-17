@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Notes de Frais URPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Notes de frais">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2F5D50">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --bg: #F5F6F3;
+    --surface: #FFFFFF;
+    --surface-2: #ECEFEA;
+    --surface-3: #E2E7DF;
+    --ink: #1C2420;
+    --ink-muted: #5B665E;
+    --ink-faint: #8B958A;
+    --line: #D8DED4;
+    --accent: #2F5D50;
+    --accent-strong: #204036;
+    --accent-soft: #DCEAE3;
+    --warn: #8A5A12;
+    --warn-soft: #F4E6CC;
+    --danger: #9C3B33;
+    --danger-soft: #F5DEDB;
+    --focus: #2F5D50;
+    --shadow: 0 1px 2px rgba(28,36,32,0.06), 0 4px 12px rgba(28,36,32,0.05);
+
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121815;
+      --surface: #1A211D;
+      --surface-2: #212A24;
+      --surface-3: #29332B;
+      --ink: #EAF0EA;
+      --ink-muted: #A9B6AC;
+      --ink-faint: #78877B;
+      --line: #2E3A32;
+      --accent: #7BBBA3;
+      --accent-strong: #9CD2BC;
+      --accent-soft: #1E332B;
+      --warn: #E0B25C;
+      --warn-soft: #3A2E14;
+      --danger: #E08A82;
+      --danger-soft: #3B211E;
+      --focus: #7BBBA3;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121815;
+    --surface: #1A211D;
+    --surface-2: #212A24;
+    --surface-3: #29332B;
+    --ink: #EAF0EA;
+    --ink-muted: #A9B6AC;
+    --ink-faint: #78877B;
+    --line: #2E3A32;
+    --accent: #7BBBA3;
+    --accent-strong: #9CD2BC;
+    --accent-soft: #1E332B;
+    --warn: #E0B25C;
+    --warn-soft: #3A2E14;
+    --danger: #E08A82;
+    --danger-soft: #3B211E;
+    --focus: #7BBBA3;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { max-width: 1120px; margin: 0 auto; padding: 28px 24px 80px; }
+
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; text-wrap: balance; margin: 0; }
+
+  a { color: var(--accent); }
+
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* ---------- topbar ---------- */
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-bottom: 20px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    display: grid; place-items: center;
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--surface);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: 0.02em;
+    flex: none;
+  }
+  .brand h1 { font-size: 22px; }
+  .brand-sub { margin: 2px 0 0; color: var(--ink-muted); font-size: 13px; }
+
+  .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px; }
+  .tab {
+    border: none; background: transparent; color: var(--ink-muted);
+    font-size: 13.5px; font-weight: 600; padding: 8px 16px; border-radius: 7px;
+    cursor: pointer; transition: background 0.15s, color 0.15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { background: var(--surface); color: var(--accent-strong); box-shadow: var(--shadow); }
+
+  /* ---------- generic ---------- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .hidden { display: none !important; }
+
+  .month-switch, .year-switch {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+  }
+  .switch-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-size: 16px; cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .switch-btn:hover { background: var(--surface-2); }
+  .month-switch h2, .year-switch h2 { font-size: 19px; text-transform: capitalize; min-width: 180px; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .stat-tile {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat-tile .stat-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); font-weight: 600; }
+  .stat-tile .stat-value {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    font-size: 22px; font-weight: 600; margin-top: 4px; color: var(--accent-strong);
+  }
+  .stat-tile.is-total .stat-value { color: var(--ink); }
+
+  .banner {
+    border-radius: 10px; padding: 12px 16px; font-size: 13.5px; margin-bottom: 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .banner-warn { background: var(--warn-soft); color: var(--warn); }
+  .banner strong { font-weight: 700; }
+
+  .layout-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .layout-grid { grid-template-columns: 1fr; } }
+
+  /* ---------- form ---------- */
+  .form-card h3 { font-size: 16px; margin-bottom: 4px; }
+  .form-hint { color: var(--ink-muted); font-size: 12.5px; margin: 0 0 16px; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-muted);
+    margin-bottom: 5px;
+  }
+  .field .helper { font-size: 11.5px; color: var(--ink-faint); margin-top: 4px; }
+  .field input, .field select {
+    width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); font-family: var(--font-body); font-size: 14px;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .km-preview { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); margin-top: 5px; }
+
+  .receipt-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .receipt-chip {
+    position: relative; width: 60px; height: 60px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--line); cursor: pointer; background: var(--surface-2);
+    display: grid; place-items: center; flex: none;
+  }
+  .receipt-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .receipt-chip .receipt-pdf-icon { font-size: 22px; }
+  .receipt-chip .receipt-remove {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; line-height: 18px; text-align: center;
+    cursor: pointer; border: none; padding: 0;
+  }
+  .row-receipt-badge {
+    display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--ink-muted);
+    background: var(--surface-2); border-radius: 999px; padding: 2px 7px; border: none; cursor: pointer;
+    font-family: var(--font-body);
+  }
+
+  .lightbox {
+    position: fixed; inset: 0; background: rgba(10,14,12,0.82); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .lightbox-inner { position: relative; max-width: 92vw; max-height: 92vh; }
+  .lightbox-inner img { max-width: 92vw; max-height: 88vh; display: block; border-radius: 8px; background: #fff; }
+  .lightbox-inner iframe { width: min(92vw, 800px); height: 85vh; border: none; border-radius: 8px; background: #fff; }
+  .lightbox-close {
+    position: absolute; top: -14px; right: -14px; width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); cursor: pointer; font-size: 15px;
+  }
+
+  .voice-block { background: var(--accent-soft); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; }
+  .voice-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--accent-strong); margin-bottom: 8px; }
+  .voice-row { display: flex; gap: 8px; align-items: flex-start; }
+  .voice-row textarea {
+    flex: 1; resize: vertical; min-height: 54px; padding: 9px 11px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    font-family: var(--font-body); font-size: 13.5px;
+  }
+  .voice-row textarea:focus { border-color: var(--accent); }
+  .mic-btn {
+    flex: none; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--surface); font-size: 18px; cursor: pointer; display: grid; place-items: center;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .mic-btn:hover { background: var(--surface-2); }
+  .mic-btn.listening { background: var(--danger); border-color: var(--danger); color: #fff; animation: mic-pulse 1.2s infinite; }
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(156,59,51,0.35); }
+    50% { box-shadow: 0 0 0 8px rgba(156,59,51,0); }
+  }
+  .voice-status { font-size: 11.5px; color: var(--ink-muted); margin-top: 8px; min-height: 14px; }
+  .voice-divider {
+    display: flex; align-items: center; gap: 10px; margin: 16px 0; color: var(--ink-faint);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .voice-divider::before, .voice-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  .line-total-preview {
+    background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; margin: 16px 0;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .line-total-preview .ltp-label { font-size: 12px; font-weight: 600; color: var(--accent-strong); }
+  .line-total-preview .ltp-value {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700;
+    font-size: 18px; color: var(--accent-strong);
+  }
+
+  .form-actions { display: flex; gap: 8px; }
+  .btn {
+    border-radius: 8px; padding: 10px 16px; font-size: 13.5px; font-weight: 600;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); flex: 1; }
+  .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+  .btn-ghost { background: transparent; }
+  .btn-small { padding: 6px 10px; font-size: 12px; }
+  .btn-danger { color: var(--danger); }
+
+  /* ---------- table ---------- */
+  .table-card { padding: 0; overflow: hidden; }
+  .table-card-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 20px 0;
+  }
+  .table-card-head h3 { font-size: 16px; }
+  .table-scroll { overflow-x: auto; padding: 14px 20px 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 880px; }
+  thead th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-faint); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 10px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: top;
+    white-space: nowrap;
+  }
+  tbody td.wrap { white-space: normal; max-width: 180px; }
+  tbody tr:hover { background: var(--surface-2); }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .pill {
+    display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+    margin-top: 4px;
+  }
+  .pill-warn { background: var(--warn-soft); color: var(--warn); }
+  tfoot td {
+    padding: 12px 10px; font-weight: 700; font-size: 13.5px; border-top: 2px solid var(--ink);
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  }
+  .row-actions { display: flex; gap: 6px; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-faint); font-size: 13.5px; }
+
+  .actions-row {
+    display: flex; gap: 10px; padding: 18px 20px; border-top: 1px solid var(--line);
+    background: var(--surface-2); flex-wrap: wrap;
+  }
+
+  /* ---------- recap ---------- */
+  .recap-table { width: 100%; border-collapse: collapse; }
+  .recap-table th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--ink-faint); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  }
+  .recap-table td { padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .recap-table tr.recap-total td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: none; }
+  .recap-bar-cell { min-width: 140px; }
+  .recap-bar-track { background: var(--surface-3); border-radius: 999px; height: 8px; overflow: hidden; }
+  .recap-bar-fill { background: var(--accent); height: 100%; border-radius: 999px; }
+
+  /* ---------- profile ---------- */
+  .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 620px; }
+  .profile-grid .field-full { grid-column: 1 / -1; }
+
+  /* ---------- mobile cards (Saisie) ---------- */
+  .line-cards { display: none; flex-direction: column; gap: 10px; padding: 14px 20px 0; }
+  .line-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .line-card-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .line-card-date { font-family: var(--font-mono); font-size: 12px; color: var(--ink-muted); }
+  .line-card-total { font-family: var(--font-mono); font-weight: 700; }
+  .line-card-desc { font-size: 13.5px; margin-bottom: 8px; color: var(--ink-muted); }
+  .line-card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12.5px; }
+  .line-card-grid .lbl { color: var(--ink-faint); }
+  @media (max-width: 640px) {
+    .table-scroll { display: none; }
+    .line-cards { display: flex; }
+  }
+
+  footer.hint {
+    margin-top: 28px; color: var(--ink-faint); font-size: 12px; text-align: center;
+  }
+
+
+
+  .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .auth-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  .auth-card h1 { font-size: 20px; margin-bottom: 4px; }
+  .auth-card .brand-mark { margin-bottom: 14px; }
+  .auth-sub { color: var(--ink-muted); font-size: 13px; margin-bottom: 20px; }
+  .auth-tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px; margin-bottom: 20px; }
+  .auth-tab { flex: 1; border: none; background: transparent; color: var(--ink-muted); font-size: 13px; font-weight: 600; padding: 8px; border-radius: 7px; cursor: pointer; }
+  .auth-tab.active { background: var(--surface); color: var(--accent-strong); box-shadow: var(--shadow); }
+  .auth-error { background: var(--danger-soft); color: var(--danger); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; }
+  .auth-info { background: var(--accent-soft); color: var(--accent-strong); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; }
+  .user-chip { display: flex; align-items: center; gap: 10px; }
+  .user-email { font-size: 12.5px; color: var(--ink-muted); }
+  .btn-logout { font-size: 12px; padding: 6px 12px; }
+  .sig-preview { max-width: 220px; max-height: 90px; display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--surface); margin-top: 8px; }
+
+</style>
+</head>
+<body>
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <span class="brand-mark">NF</span>
+    <h1>Notes de frais URPS</h1>
+    <p class="auth-sub">Connecte-toi pour retrouver tes notes de frais, sur tous tes appareils.</p>
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab active" id="authTabLogin">Connexion</button>
+      <button type="button" class="auth-tab" id="authTabSignup">Créer un compte</button>
+    </div>
+    <div id="authError" class="auth-error hidden"></div>
+    <div id="authInfo" class="auth-info hidden"></div>
+    <form id="authForm">
+      <div class="field">
+        <label for="auth-email">Email</label>
+        <input type="email" id="auth-email" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="auth-password">Mot de passe</label>
+        <input type="password" id="auth-password" required autocomplete="current-password" minlength="6">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" id="authSubmit">Se connecter</button>
+      </div>
+    </form>
+    <p class="auth-sub" style="margin-top:14px; margin-bottom:0;"><a href="#" id="authForgot">Mot de passe oublié ?</a></p>
+  </div>
+</div>
+
+<div id="appScreen" class="hidden">
+
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">NF</span>
+      <div>
+        <h1>Notes de frais</h1>
+        <p class="brand-sub">URPS Chirurgiens-Dentistes PACA</p>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="saisie">Saisie</button>
+      <button class="tab" data-tab="recap">Récapitulatif</button>
+      <button class="tab" data-tab="profil">Profil</button>
+    </nav>
+    <div class="user-chip">
+      <span class="user-email" id="userEmail"></span>
+      <button class="btn btn-small btn-logout" id="btnLogout">Se déconnecter</button>
+    </div>
+  </header>
+
+  <div id="storageBanner" class="banner banner-warn hidden">
+    <span id="storageBannerText">⚠ Erreur de connexion — réessaie.</span>
+  </div>
+
+  <!-- SAISIE -->
+  <section id="tab-saisie" class="tab-panel active">
+    <div class="month-switch">
+      <button class="switch-btn" id="prevMonth" aria-label="Mois précédent">‹</button>
+      <h2 id="monthLabel">—</h2>
+      <button class="switch-btn" id="nextMonth" aria-label="Mois suivant">›</button>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-tile"><div class="stat-label">Total frais</div><div class="stat-value" id="statFrais">0,00 €</div></div>
+      <div class="stat-tile"><div class="stat-label">Total indemnités</div><div class="stat-value" id="statIndem">0,00 €</div></div>
+      <div class="stat-tile is-total"><div class="stat-label">Dépenses totales</div><div class="stat-value" id="statTotal">0,00 €</div></div>
+    </div>
+
+    <div id="monthWarnBanner" class="banner banner-warn hidden"></div>
+
+    <div class="layout-grid">
+      <form class="card form-card" id="lineForm">
+        <h3 id="formTitle">Nouvelle dépense</h3>
+        <p class="form-hint">Une ligne = une mission ou un déplacement.</p>
+
+        <div class="voice-block">
+          <label class="voice-label" for="voiceText">🎙️ Dicter la dépense</label>
+          <div class="voice-row">
+            <textarea id="voiceText" placeholder="Ex : réunion CA à Marseille le 15 septembre, 120 km en voiture, 90€ d'hôtel, une demi-journée en présentiel"></textarea>
+            <button type="button" class="mic-btn" id="micBtn" title="Dicter" aria-label="Dicter">🎙️</button>
+          </div>
+          <button type="button" class="btn btn-primary" id="parseBtn" style="width:100%; margin-top:10px;">Remplir les champs</button>
+          <div class="voice-status" id="voiceStatus"></div>
+        </div>
+        <div class="voice-divider">ou saisissez manuellement</div>
+
+        <div class="field">
+          <label for="f-date">Date</label>
+          <input type="date" id="f-date" required>
+        </div>
+        <div class="field">
+          <label for="f-desc">Descriptif</label>
+          <input type="text" id="f-desc" placeholder="Réunion CA, déplacement Marseille…">
+        </div>
+        <div class="field">
+          <label for="f-transport">Train / Taxi / Avion (€)</label>
+          <input type="number" id="f-transport" min="0" step="0.01" value="0">
+        </div>
+        <div class="field">
+          <label for="f-km">Kilomètres parcourus (voiture/moto)</label>
+          <input type="number" id="f-km" min="0" step="1" value="0">
+          <div class="km-preview" id="kmPreview">Frais km : 0,00 €</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-parking">Parking / Péage (€)</label>
+            <input type="number" id="f-parking" min="0" step="0.01" value="0">
+            <button type="button" class="btn btn-small btn-ghost" id="tollShortcut" style="margin-top:6px; padding:4px 8px; font-size:11px;">🛣️ A/R Nice↔Marseille</button>
+          </div>
+          <div class="field">
+            <label for="f-divers">Autres frais (€)</label>
+            <input type="number" id="f-divers" min="0" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-hotel">Hôtel (€)</label>
+            <input type="number" id="f-hotel" min="0" step="0.01" value="0">
+            <div class="helper">Plafond 250 €</div>
+          </div>
+          <div class="field">
+            <label for="f-repas">Repas (€)</label>
+            <input type="number" id="f-repas" min="0" step="0.01" value="0">
+            <div class="helper">Plafond 30 €</div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-trajet">Temps de trajet (aller-retour)</label>
+          <select id="f-trajet">
+            <option value="none">Aucun</option>
+            <option value="lt1h">Moins d'1 heure — 65 €</option>
+            <option value="h1_2">1 à 2 heures — 130 €</option>
+            <option value="h2_6">2 à 6 heures — 260 €</option>
+          </select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-demi">Demi-journées présentiel</label>
+            <input type="number" id="f-demi" min="0" step="1" value="0">
+            <div class="helper">276 €/demi-journée</div>
+          </div>
+          <div class="field">
+            <label for="f-visio">Réunions en visio</label>
+            <input type="number" id="f-visio" min="0" step="1" value="0">
+            <div class="helper">276 €/réunion</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Justificatifs</label>
+          <input type="file" id="attachInput" accept="image/*,application/pdf" capture="environment" multiple class="hidden">
+          <button type="button" class="btn btn-small" id="btnAttach">📎 Ajouter (photo ou fichier)</button>
+          <div class="helper" id="receiptStatus"></div>
+          <div class="receipt-list" id="receiptList"></div>
+        </div>
+
+        <div class="line-total-preview">
+          <span class="ltp-label">Total de la ligne</span>
+          <span class="ltp-value" id="lineTotalPreview">0,00 €</span>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Ajouter</button>
+          <button type="button" class="btn btn-ghost hidden" id="cancelEdit">Annuler</button>
+        </div>
+      </form>
+
+      <div class="card table-card">
+        <div class="table-card-head">
+          <h3 id="tableMonthTitle">Dépenses du mois</h3>
+        </div>
+        <div class="table-scroll">
+          <table id="linesTable">
+            <thead>
+              <tr>
+                <th>Date</th><th class="wrap">Descriptif</th>
+                <th class="num">Transport</th><th class="num">Km</th><th class="num">Frais km</th>
+                <th class="num">Parking</th><th class="num">Hôtel</th><th class="num">Repas</th><th class="num">Divers</th>
+                <th>Trajet</th><th class="num">1/2j</th><th class="num">Visio</th>
+                <th class="num">Indemnités</th><th class="num">Total</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="linesTbody"></tbody>
+            <tfoot id="linesTfoot"></tfoot>
+          </table>
+        </div>
+        <div class="line-cards" id="lineCards"></div>
+        <div class="actions-row">
+          <button class="btn" id="btnPrintMonth" title="Télécharge la note au format PDF, avec signature et justificatifs">Télécharger en PDF</button>
+          <button class="btn" id="btnCsvMonth">Exporter en CSV</button>
+          <button class="btn" id="btnEmailMonth">Préparer l'email pour l'URPS</button>
+        </div>
+        <div class="voice-block hidden" id="emailPanel" style="margin:0 20px 20px;">
+          <label class="voice-label">Message pour l'URPS</label>
+          <div class="field">
+            <label for="emailTo">Destinataire</label>
+            <input type="text" id="emailTo" readonly>
+          </div>
+          <div class="field">
+            <label for="emailSubject">Objet</label>
+            <input type="text" id="emailSubject" readonly>
+          </div>
+          <div class="field">
+            <label for="emailBody">Message</label>
+            <textarea id="emailBody" rows="7" readonly style="width:100%; resize:vertical; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--font-body); font-size:13.5px;"></textarea>
+          </div>
+          <button type="button" class="btn btn-primary" id="btnCopyEmail" style="width:100%;">Copier le message</button>
+          <div class="voice-status" id="emailStatus">N'oublie pas de joindre le fichier téléchargé (bouton ci-dessus) à ton mail.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECAP -->
+  <section id="tab-recap" class="tab-panel">
+    <div class="year-switch">
+      <button class="switch-btn" id="prevYear" aria-label="Année précédente">‹</button>
+      <h2 id="yearLabel">—</h2>
+      <button class="switch-btn" id="nextYear" aria-label="Année suivante">›</button>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-tile"><div class="stat-label">Frais annuels</div><div class="stat-value" id="yearStatFrais">0,00 €</div></div>
+      <div class="stat-tile"><div class="stat-label">Indemnités annuelles</div><div class="stat-value" id="yearStatIndem">0,00 €</div></div>
+      <div class="stat-tile is-total"><div class="stat-label">Total annuel</div><div class="stat-value" id="yearStatTotal">0,00 €</div></div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div class="table-scroll" style="padding:18px 20px;">
+        <table class="recap-table" id="recapTable">
+          <thead>
+            <tr><th>Mois</th><th class="num">Indemnités</th><th class="num">Frais</th><th class="num">Total</th><th class="recap-bar-cell"></th></tr>
+          </thead>
+          <tbody id="recapTbody"></tbody>
+        </table>
+      </div>
+      <div class="actions-row">
+        <button class="btn" id="btnPrintYear" title="Télécharge le récapitulatif au format PDF">Télécharger en PDF</button>
+        <button class="btn" id="btnCsvYear">Exporter en CSV</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROFIL -->
+  <section id="tab-profil" class="tab-panel">
+    <div class="card">
+      <h3 style="font-size:16px; margin-bottom:4px;">Informations personnelles</h3>
+      <p class="form-hint">Utilisées sur les notes de frais imprimées et dans l'email à l'URPS.</p>
+      <form id="profileForm" class="profile-grid">
+        <div class="field field-full">
+          <label for="p-nom">Nom</label>
+          <input type="text" id="p-nom">
+        </div>
+        <div class="field">
+          <label for="p-adresse1">Adresse</label>
+          <input type="text" id="p-adresse1">
+        </div>
+        <div class="field">
+          <label for="p-adresse2">Code postal / Ville</label>
+          <input type="text" id="p-adresse2">
+        </div>
+        <div class="field field-full">
+          <label for="p-email">Email destinataire (URPS)</label>
+          <input type="email" id="p-email">
+        </div>
+        <div class="field">
+          <label for="p-vehicule">Type de véhicule</label>
+          <select id="p-vehicule">
+            <option value="Auto">Auto</option>
+            <option value="Moto_Scooter">Moto / Scooter</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="p-kmrate">Taux kilométrique (€/km)</label>
+          <input type="number" id="p-kmrate" min="0" step="0.001">
+        </div>
+        <div class="field field-full">
+          <label for="p-peage">Péage aller-retour Nice Nord ↔ Marseille (€)</label>
+          <input type="number" id="p-peage" min="0" step="0.01">
+          <div class="helper">Estimation web (barème A8, hors modulations) — vérifie et ajuste si besoin, les tarifs évoluent chaque février.</div>
+        </div>
+        <div class="field field-full">
+          <label>Signature</label>
+          <input type="file" id="sigInput" accept="image/*" class="hidden">
+          <div id="sigPreviewWrap"><img id="sigPreview" class="sig-preview hidden" alt="Ta signature"></div>
+          <div class="row-actions" style="margin-top:8px;">
+            <button type="button" class="btn btn-small" id="btnSigUpload">Choisir une image</button>
+            <button type="button" class="btn btn-small btn-danger hidden" id="btnSigRemove">Retirer</button>
+          </div>
+          <div class="helper">Utilisée sur tes PDF téléchargés (note et récapitulatif).</div>
+        </div>
+        <div class="field-full form-actions">
+          <button type="submit" class="btn btn-primary" style="flex:0;">Enregistrer</button>
+          <span id="profileSaved" class="helper hidden" style="align-self:center; color:var(--accent-strong); font-weight:600;">Enregistré ✓</span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <footer class="hint">Les montants sont calculés selon le barème URPS en vigueur — vérifiez-les avant envoi.</footer>
+</div>
+
+<div class="lightbox hidden" id="lightbox">
+  <div class="lightbox-inner">
+    <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Fermer">✕</button>
+    <div id="lightboxContent"></div>
+  </div>
+</div>
+
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
