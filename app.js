@@ -6,7 +6,8 @@
     nom: "",
     adresse1: "",
     adresse2: "",
-    email: "secretariat@urps-paca-chd.fr",
+    recipients: [{ label: "URPS", email: "secretariat@urps-paca-chd.fr" }],
+    orgHeader: "URPS Chirurgiens-Dentistes PACA",
     kmRate: 0.697,
     vehicleType: "Auto",
     peageNiceMarseille: 42.4,
@@ -618,10 +619,16 @@
     document.getElementById("p-nom").value = state.profile.nom;
     document.getElementById("p-adresse1").value = state.profile.adresse1;
     document.getElementById("p-adresse2").value = state.profile.adresse2;
-    document.getElementById("p-email").value = state.profile.email;
     document.getElementById("p-vehicule").value = state.profile.vehicleType;
     document.getElementById("p-kmrate").value = state.profile.kmRate;
     document.getElementById("p-peage").value = state.profile.peageNiceMarseille;
+    var orgHeader = state.profile.orgHeader || DEFAULT_PROFILE.orgHeader;
+    var orgSelect = document.getElementById("p-orgheader");
+    var orgCustom = document.getElementById("p-orgheader-custom");
+    var isPreset = Array.prototype.some.call(orgSelect.options, function (o) { return o.value === orgHeader; });
+    if (isPreset) { orgSelect.value = orgHeader; orgCustom.classList.add("hidden"); orgCustom.value = ""; }
+    else { orgSelect.value = "__custom__"; orgCustom.classList.remove("hidden"); orgCustom.value = orgHeader; }
+    renderRecipients();
     var img = document.getElementById("sigPreview");
     var removeBtn = document.getElementById("btnSigRemove");
     if (state.profile.signatureDataUrl) {
@@ -651,13 +658,63 @@
     renderProfile();
   });
 
+  // ---- recipients (destinataires) ----
+  function recipientsList() {
+    return (state.profile.recipients && state.profile.recipients.length) ? state.profile.recipients : DEFAULT_PROFILE.recipients;
+  }
+  function defaultRecipientEmail() {
+    var list = recipientsList();
+    return list[0] ? list[0].email : "";
+  }
+  function renderRecipients() {
+    var list = document.getElementById("recipientList");
+    var items = state.profile.recipients || [];
+    list.innerHTML = "";
+    if (!items.length) {
+      list.innerHTML = '<div class="helper">Aucun destinataire — ajoute-en un ci-dessous.</div>';
+      return;
+    }
+    items.forEach(function (r, idx) {
+      var row = document.createElement("div");
+      row.className = "recipient-row";
+      row.innerHTML = '<div class="recipient-info"><strong>' + escapeHtml(r.label || "Sans nom") + '</strong><span>' + escapeHtml(r.email) + "</span></div>" +
+        '<button type="button" class="btn btn-small btn-danger" data-remove-recipient="' + idx + '">✕</button>';
+      list.appendChild(row);
+    });
+    list.querySelectorAll("[data-remove-recipient]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        state.profile.recipients.splice(parseInt(btn.getAttribute("data-remove-recipient"), 10), 1);
+        renderRecipients();
+      });
+    });
+  }
+  document.getElementById("btnAddRecipient").addEventListener("click", function () {
+    var label = document.getElementById("p-recipient-label").value.trim();
+    var email = document.getElementById("p-recipient-email").value.trim();
+    if (!email) { alertFallback("Indique une adresse email pour ce destinataire."); return; }
+    if (!state.profile.recipients) state.profile.recipients = [];
+    state.profile.recipients.push({ label: label || email, email: email });
+    document.getElementById("p-recipient-label").value = "";
+    document.getElementById("p-recipient-email").value = "";
+    renderRecipients();
+  });
+
+  document.getElementById("p-orgheader").addEventListener("change", function () {
+    document.getElementById("p-orgheader-custom").classList.toggle("hidden", this.value !== "__custom__");
+  });
+
   document.getElementById("profileForm").addEventListener("submit", function (e) {
     e.preventDefault();
+    var orgSelectVal = document.getElementById("p-orgheader").value;
+    var orgHeader = orgSelectVal === "__custom__"
+      ? (document.getElementById("p-orgheader-custom").value.trim() || DEFAULT_PROFILE.orgHeader)
+      : orgSelectVal;
     var p = {
       nom: document.getElementById("p-nom").value.trim(),
       adresse1: document.getElementById("p-adresse1").value.trim(),
       adresse2: document.getElementById("p-adresse2").value.trim(),
-      email: document.getElementById("p-email").value.trim() || DEFAULT_PROFILE.email,
+      recipients: recipientsList(),
+      orgHeader: orgHeader,
       vehicleType: document.getElementById("p-vehicule").value,
       kmRate: num(document.getElementById("p-kmrate").value) || DEFAULT_PROFILE.kmRate,
       peageNiceMarseille: num(document.getElementById("p-peage").value) || 0,
@@ -684,7 +741,7 @@
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(90);
-    doc.text("URPS Chirurgiens-Dentistes PACA", margin, 24);
+    doc.text(state.profile.orgHeader || DEFAULT_PROFILE.orgHeader, margin, 24);
     doc.setTextColor(20);
   }
   function pdfIdentityBlock(doc, margin, startY) {
@@ -692,7 +749,7 @@
     doc.setFontSize(10);
     doc.setTextColor(20);
     var y = startY;
-    [state.profile.nom, state.profile.adresse1, state.profile.adresse2, "Adressé à : " + state.profile.email].forEach(function (t) {
+    [state.profile.nom, state.profile.adresse1, state.profile.adresse2, "Adressé à : " + defaultRecipientEmail()].forEach(function (t) {
       doc.text(t, margin, y);
       y += 5;
     });
@@ -917,7 +974,7 @@
 
   // ================= email (copy-to-clipboard flow) =================
   function selectReadonlyField(el) { el.focus(); el.select(); }
-  ["emailTo", "emailSubject", "emailBody"].forEach(function (id) {
+  ["emailSubject", "emailBody"].forEach(function (id) {
     document.getElementById(id).addEventListener("click", function () { selectReadonlyField(this); });
   });
 
@@ -930,7 +987,15 @@
       "Total frais : " + euro(sums.frais) + "\nTotal indemnités : " + euro(sums.indem) + "\nDépenses totales : " + euro(sums.total) +
       "\n\nCordialement,\n" + state.profile.nom;
 
-    document.getElementById("emailTo").value = state.profile.email;
+    var select = document.getElementById("emailTo");
+    select.innerHTML = "";
+    recipientsList().forEach(function (r) {
+      var opt = document.createElement("option");
+      opt.value = r.email;
+      opt.textContent = (r.label ? r.label + " — " : "") + r.email;
+      select.appendChild(opt);
+    });
+
     document.getElementById("emailSubject").value = subject;
     document.getElementById("emailBody").value = body;
     var panel = document.getElementById("emailPanel");
@@ -939,7 +1004,7 @@
 
     try {
       var a = document.createElement("a");
-      a.href = "mailto:" + state.profile.email + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      a.href = "mailto:" + select.value + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
@@ -992,7 +1057,9 @@
     if (!row) return Object.assign({}, DEFAULT_PROFILE);
     return {
       nom: row.nom || "", adresse1: row.adresse1 || "", adresse2: row.adresse2 || "",
-      email: row.email || DEFAULT_PROFILE.email, kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
+      recipients: (row.recipients && row.recipients.length) ? row.recipients : DEFAULT_PROFILE.recipients,
+      orgHeader: row.org_header || DEFAULT_PROFILE.orgHeader,
+      kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
       vehicleType: row.vehicle_type || "Auto", peageNiceMarseille: row.peage_nice_marseille || DEFAULT_PROFILE.peageNiceMarseille,
       signatureDataUrl: row.signature_data_url || null
     };
@@ -1024,7 +1091,8 @@
   }
   async function saveProfile(p) {
     var row = {
-      id: state.userId, nom: p.nom, adresse1: p.adresse1, adresse2: p.adresse2, email: p.email,
+      id: state.userId, nom: p.nom, adresse1: p.adresse1, adresse2: p.adresse2,
+      recipients: p.recipients, org_header: p.orgHeader,
       km_rate: p.kmRate, vehicle_type: p.vehicleType, peage_nice_marseille: p.peageNiceMarseille,
       signature_data_url: p.signatureDataUrl, updated_at: new Date().toISOString()
     };

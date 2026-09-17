@@ -369,6 +369,11 @@
   .user-email { font-size: 12.5px; color: var(--ink-muted); }
   .btn-logout { font-size: 12px; padding: 6px 12px; }
   .sig-preview { max-width: 220px; max-height: 90px; display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--surface); margin-top: 8px; }
+  .recipient-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .recipient-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+  .recipient-row .recipient-info { font-size: 13px; }
+  .recipient-row .recipient-info strong { font-weight: 600; }
+  .recipient-row .recipient-info span { color: var(--ink-muted); margin-left: 6px; }
 
 </style>
 </head>
@@ -571,7 +576,7 @@
           <label class="voice-label">Message pour l'URPS</label>
           <div class="field">
             <label for="emailTo">Destinataire</label>
-            <input type="text" id="emailTo" readonly>
+            <select id="emailTo"></select>
           </div>
           <div class="field">
             <label for="emailSubject">Objet</label>
@@ -628,6 +633,15 @@
           <label for="p-nom">Nom</label>
           <input type="text" id="p-nom">
         </div>
+        <div class="field field-full">
+          <label for="p-orgheader">En-tête (sous "Note de frais" sur le PDF)</label>
+          <select id="p-orgheader">
+            <option value="URPS Chirurgiens-Dentistes PACA">URPS Chirurgiens-Dentistes PACA</option>
+            <option value="FSDL PACA">FSDL PACA</option>
+            <option value="__custom__">Autre…</option>
+          </select>
+          <input type="text" id="p-orgheader-custom" class="hidden" style="margin-top:8px;" placeholder="Nom de l'organisme">
+        </div>
         <div class="field">
           <label for="p-adresse1">Adresse</label>
           <input type="text" id="p-adresse1">
@@ -637,8 +651,20 @@
           <input type="text" id="p-adresse2">
         </div>
         <div class="field field-full">
-          <label for="p-email">Email destinataire (URPS)</label>
-          <input type="email" id="p-email">
+          <label>Destinataires</label>
+          <div class="helper">Choisis parmi ces adresses au moment de préparer un email (secrétariat, trésorier…). La première de la liste est utilisée par défaut sur les PDF.</div>
+          <div id="recipientList" class="recipient-list"></div>
+          <div class="field-row" style="margin-top:10px;">
+            <div class="field">
+              <label for="p-recipient-label">Nom</label>
+              <input type="text" id="p-recipient-label" placeholder="Secrétariat">
+            </div>
+            <div class="field">
+              <label for="p-recipient-email">Email</label>
+              <input type="email" id="p-recipient-email" placeholder="nom@urps-paca-chd.fr">
+            </div>
+          </div>
+          <button type="button" class="btn btn-small" id="btnAddRecipient" style="margin-top:2px;">+ Ajouter ce destinataire</button>
         </div>
         <div class="field">
           <label for="p-vehicule">Type de véhicule</label>
