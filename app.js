@@ -1078,6 +1078,7 @@
 
   document.getElementById("authForm").addEventListener("submit", async function (e) {
     e.preventDefault();
+    if (!sb) { showAuthError("Configuration manquante : édite config.js avec l'URL et la clé Supabase du projet, puis recharge la page."); return; }
     hideAuthMessages();
     var email = document.getElementById("auth-email").value.trim();
     var password = document.getElementById("auth-password").value;
@@ -1102,6 +1103,7 @@
 
   document.getElementById("authForgot").addEventListener("click", async function (e) {
     e.preventDefault();
+    if (!sb) { showAuthError("Configuration manquante : édite config.js avec l'URL et la clé Supabase du projet, puis recharge la page."); return; }
     hideAuthMessages();
     var email = document.getElementById("auth-email").value.trim();
     if (!email) { showAuthError("Saisis ton email ci-dessus puis clique à nouveau sur ce lien."); return; }
