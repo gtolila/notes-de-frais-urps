@@ -120,6 +120,7 @@
     var d = new Date(state.viewYear, state.viewMonth - 1 + delta, 1);
     state.viewYear = d.getFullYear();
     state.viewMonth = d.getMonth() + 1;
+    if (pendingMonthPdf) resetMonthPdfButton();
     renderSaisie();
   }
   document.getElementById("prevYear").addEventListener("click", function () { state.recapYear--; renderRecap(); });
@@ -774,12 +775,10 @@
     doc.line(margin, y + 24, margin + 65, y + 24);
 
     if (state.profile.signatureDataUrl) {
-      var img = new Image();
-      // synchronous-ish: jsPDF addImage needs dimensions; we precomputed none here so use a safe default box.
       var sigW = 42, sigH = 18;
       try {
         var sigX = pageWidth - margin - sigW;
-        doc.addImage(state.profile.signatureDataUrl, sigX, y, sigW, sigH);
+        doc.addImage(state.profile.signatureDataUrl, "JPEG", sigX, y, sigW, sigH);
       } catch (e) { /* unsupported format, skip image */ }
     }
     var sigX2 = pageWidth - margin - 42;
@@ -915,19 +914,36 @@
     return doc;
   }
 
+  // Browsers can silently drop a download triggered after an `await` (the click's "user
+  // activation" can expire while the PDF is being built, e.g. while fetching receipt images).
+  // So: generate on the first click, then require a second, fully-synchronous click to save —
+  // that second click is a fresh user gesture the browser always honors.
+  var pendingMonthPdf = null;
+  function resetMonthPdfButton() {
+    pendingMonthPdf = null;
+    var btn = document.getElementById("btnPrintMonth");
+    btn.textContent = "Télécharger en PDF";
+    btn.disabled = false;
+  }
   document.getElementById("btnPrintMonth").addEventListener("click", async function () {
-    var btn = this; var oldText = btn.textContent;
+    var btn = this;
+    if (pendingMonthPdf) {
+      pendingMonthPdf.doc.save(pendingMonthPdf.filename);
+      resetMonthPdfButton();
+      return;
+    }
     btn.textContent = "Génération…"; btn.disabled = true;
     try {
       var lines = linesForMonth(state.viewYear, state.viewMonth);
       var sums = sumLines(lines);
       var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
       var doc = await buildNoteDoc(lines, sums, "Note de frais — " + state.profile.nom + " — " + label);
-      doc.save("note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".pdf");
+      pendingMonthPdf = { doc: doc, filename: "note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".pdf" };
+      btn.textContent = "✓ Cliquer pour télécharger";
+      btn.disabled = false;
     } catch (err) {
       alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
-    } finally {
-      btn.textContent = oldText; btn.disabled = false;
+      resetMonthPdfButton();
     }
   });
 
