@@ -828,6 +828,7 @@
   }
 
   async function buildNoteDoc(lines, sums, titleLine) {
+    if (!window.jspdf) throw new Error("La bibliothèque PDF n'a pas pu se charger — vérifie ta connexion et recharge la page.");
     var doc = new window.jspdf.jsPDF();
     var margin = 14;
     var pageWidth = doc.internal.pageSize.getWidth();
@@ -875,6 +876,7 @@
   }
 
   function buildRecapDoc(year, titleLine) {
+    if (!window.jspdf) throw new Error("La bibliothèque PDF n'a pas pu se charger — vérifie ta connexion et recharge la page.");
     var doc = new window.jspdf.jsPDF();
     var margin = 14;
     var pageWidth = doc.internal.pageSize.getWidth();
@@ -948,8 +950,12 @@
   });
 
   document.getElementById("btnPrintYear").addEventListener("click", function () {
-    var doc = buildRecapDoc(state.recapYear, "Récapitulatif annuel — " + state.profile.nom + " — " + state.recapYear);
-    doc.save("recapitulatif-" + slugify(state.profile.nom) + "-" + state.recapYear + ".pdf");
+    try {
+      var doc = buildRecapDoc(state.recapYear, "Récapitulatif annuel — " + state.profile.nom + " — " + state.recapYear);
+      doc.save("recapitulatif-" + slugify(state.profile.nom) + "-" + state.recapYear + ".pdf");
+    } catch (err) {
+      alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
+    }
   });
 
   // ================= CSV export =================
