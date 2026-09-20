@@ -1362,13 +1362,18 @@
     }
     sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
+    // onAuthStateChange alone already fires once immediately with the current session
+    // (restored, or none) — calling getSession() as well raced it and could invoke
+    // showAppScreen twice concurrently, which crashed inconsistently across browsers.
+    var appScreenBusy = false;
     sb.auth.onAuthStateChange(function (event, session) {
-      if (session && session.user) showAppScreen(session.user);
-      else showAuthScreen();
-    });
-    sb.auth.getSession().then(function (res) {
-      if (res.data.session && res.data.session.user) showAppScreen(res.data.session.user);
-      else showAuthScreen();
+      if (session && session.user) {
+        if (appScreenBusy) return;
+        appScreenBusy = true;
+        showAppScreen(session.user).finally(function () { appScreenBusy = false; });
+      } else {
+        showAuthScreen();
+      }
     });
   }
   init();
