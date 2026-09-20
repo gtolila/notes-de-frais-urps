@@ -306,6 +306,12 @@
   }
   tbody td.wrap { white-space: normal; max-width: 180px; }
   tbody tr:hover { background: var(--surface-2); }
+  .actions-col {
+    position: sticky; right: 0; background: var(--surface);
+    box-shadow: -6px 0 8px -6px rgba(0,0,0,0.15);
+  }
+  thead th.actions-col { background: var(--surface); }
+  tbody tr:hover td.actions-col { background: var(--surface-2); }
   .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
   .pill {
     display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
@@ -570,7 +576,7 @@
                 <th class="num">Transport</th><th class="num">Km</th><th class="num">Frais km</th>
                 <th class="num">Parking</th><th class="num">Hôtel</th><th class="num">Repas</th><th class="num">Divers</th>
                 <th>Trajet</th><th class="num">1/2j</th><th class="num">Visio</th>
-                <th class="num">Indemnités</th><th class="num">Total</th><th></th>
+                <th class="num">Indemnités</th><th class="num">Total</th><th class="actions-col"></th>
               </tr>
             </thead>
             <tbody id="linesTbody"></tbody>
@@ -760,9 +766,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20260918g"></script>
-<script src="jspdf.autotable.min.js?v=20260918g"></script>
-<script src="config.js?v=20260918g"></script>
-<script src="app.js?v=20260918g"></script>
+<script src="jspdf.umd.min.js?v=20260918h"></script>
+<script src="jspdf.autotable.min.js?v=20260918h"></script>
+<script src="config.js?v=20260918h"></script>
+<script src="app.js?v=20260918h"></script>
 </body>
 </html>

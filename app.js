@@ -543,7 +543,7 @@
           '<td class="num">' + (l.visio || 0) + "</td>" +
           '<td class="num">' + euro(c.indemnites) + (c.quotaDepasse ? '<div class="pill pill-warn">Quota</div>' : "") + "</td>" +
           '<td class="num">' + euro(c.total) + "</td>" +
-          '<td><div class="row-actions">' + receiptBadge +
+          '<td class="actions-col"><div class="row-actions">' + receiptBadge +
             '<button class="btn btn-small" data-edit="' + l.id + '">✎</button>' +
             '<button class="btn btn-small btn-danger" data-del="' + l.id + '">✕</button>' +
           "</div></td>";
