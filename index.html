@@ -376,6 +376,11 @@
   .sig-preview { max-width: 220px; max-height: 90px; display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--surface); margin-top: 8px; }
   .recipient-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
   .recipient-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+  .admin-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .admin-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+  .admin-row .admin-info { font-size: 13px; }
+  .admin-row .admin-info strong { font-weight: 600; }
+  .admin-empty { color: var(--ink-faint); font-size: 13px; padding: 8px 0; }
   .recipient-row .recipient-info { font-size: 13px; }
   .recipient-row .recipient-info strong { font-weight: 600; }
   .recipient-row .recipient-info span { color: var(--ink-muted); margin-left: 6px; }
@@ -428,6 +433,7 @@
       <button class="tab active" data-tab="saisie">Saisie</button>
       <button class="tab" data-tab="recap">Récapitulatif</button>
       <button class="tab" data-tab="profil">Profil</button>
+      <button class="tab hidden" id="tabAdmin" data-tab="admin">Admin</button>
     </nav>
     <div class="user-chip">
       <span class="user-email" id="userEmail"></span>
@@ -708,7 +714,39 @@
     </div>
   </section>
 
+  <!-- ADMIN -->
+  <section id="tab-admin" class="tab-panel">
+    <div class="card">
+      <h3 style="font-size:16px; margin-bottom:4px;">Comptes en attente de validation</h3>
+      <p class="form-hint">Ces personnes se sont inscrites mais n'ont pas encore accès à leurs données.</p>
+      <div id="pendingList" class="admin-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <h3 style="font-size:16px; margin-bottom:4px;">Adresses auto-approuvées</h3>
+      <p class="form-hint">Ces adresses (ou domaines) obtiennent l'accès automatiquement à l'inscription, sans validation.</p>
+      <div id="allowedList" class="admin-list"></div>
+      <div class="field-row" style="margin-top:10px;">
+        <div class="field field-full">
+          <label for="p-allowed-email">Ajouter une adresse (ou @domaine.fr pour tout un domaine)</label>
+          <input type="text" id="p-allowed-email" placeholder="nom@domaine.fr ou @domaine.fr">
+        </div>
+      </div>
+      <button type="button" class="btn btn-small" id="btnAddAllowed">+ Ajouter</button>
+    </div>
+  </section>
+
   <footer class="hint">Les montants sont calculés selon le barème URPS en vigueur — vérifiez-les avant envoi.</footer>
+</div>
+
+<div id="pendingApprovalScreen" class="auth-wrap hidden">
+  <div class="auth-card">
+    <span class="brand-mark">NF</span>
+    <h1>Compte en attente</h1>
+    <p class="auth-sub">Ton inscription a bien été reçue. Un administrateur doit valider ton accès avant que tu puisses utiliser l'application — reviens un peu plus tard.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" id="btnPendingLogout">Se déconnecter</button>
+    </div>
+  </div>
 </div>
 
 <div class="lightbox hidden" id="lightbox">
@@ -722,9 +760,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20260918d"></script>
-<script src="jspdf.autotable.min.js?v=20260918d"></script>
-<script src="config.js?v=20260918d"></script>
-<script src="app.js?v=20260918d"></script>
+<script src="jspdf.umd.min.js?v=20260918e"></script>
+<script src="jspdf.autotable.min.js?v=20260918e"></script>
+<script src="config.js?v=20260918e"></script>
+<script src="app.js?v=20260918e"></script>
 </body>
 </html>

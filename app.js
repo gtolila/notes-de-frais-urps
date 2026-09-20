@@ -6,7 +6,10 @@
     nom: "",
     adresse1: "",
     adresse2: "",
-    recipients: [{ label: "URPS", email: "secretariat@urps-paca-chd.fr" }],
+    recipients: [
+      { label: "URPS PACA", email: "secretariat@urps-paca-chd.fr" },
+      { label: "FSDL PACA", email: "tresorierfsdlpaca@gmail.com" }
+    ],
     orgHeader: "URPS Chirurgiens-Dentistes PACA",
     kmRate: 0.697,
     vehicleType: "Auto",
@@ -1119,7 +1122,8 @@
       orgHeader: row.org_header || DEFAULT_PROFILE.orgHeader,
       kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
       vehicleType: row.vehicle_type || "Auto", peageNiceMarseille: row.peage_nice_marseille || DEFAULT_PROFILE.peageNiceMarseille,
-      signatureDataUrl: row.signature_data_url || null
+      signatureDataUrl: row.signature_data_url || null,
+      email: row.email || "", isApproved: !!row.is_approved, isAdmin: !!row.is_admin
     };
   }
 
@@ -1163,6 +1167,62 @@
     state.profile = rowToProfile(res.data);
     renderProfile();
   }
+
+  // ================= admin (validation des comptes) =================
+  async function refreshAdmin() {
+    var pendingRes = await sb.from("profiles").select("*").eq("is_approved", false).order("nom");
+    var pendingList = document.getElementById("pendingList");
+    pendingList.innerHTML = "";
+    if (pendingRes.error) { pendingList.innerHTML = '<div class="admin-empty">Erreur de chargement.</div>'; }
+    else if (!pendingRes.data.length) { pendingList.innerHTML = '<div class="admin-empty">Aucune demande en attente.</div>'; }
+    else {
+      pendingRes.data.forEach(function (row) {
+        var div = document.createElement("div");
+        div.className = "admin-row";
+        div.innerHTML = '<div class="admin-info"><strong>' + escapeHtml(row.nom || "(sans nom)") + '</strong> — ' + escapeHtml(row.email || row.id) + '</div>' +
+          '<button type="button" class="btn btn-small btn-primary" data-approve="' + row.id + '">Approuver</button>';
+        pendingList.appendChild(div);
+      });
+      pendingList.querySelectorAll("[data-approve]").forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          btn.disabled = true;
+          var res = await sb.from("profiles").update({ is_approved: true }).eq("id", btn.getAttribute("data-approve"));
+          if (res.error) { alertFallback("Échec de l'approbation : " + res.error.message); btn.disabled = false; }
+          else refreshAdmin();
+        });
+      });
+    }
+
+    var allowedRes = await sb.from("allowed_emails").select("*").order("email");
+    var allowedList = document.getElementById("allowedList");
+    allowedList.innerHTML = "";
+    if (allowedRes.error) { allowedList.innerHTML = '<div class="admin-empty">Erreur de chargement.</div>'; }
+    else if (!allowedRes.data.length) { allowedList.innerHTML = '<div class="admin-empty">Aucune adresse pré-approuvée.</div>'; }
+    else {
+      allowedRes.data.forEach(function (row) {
+        var div = document.createElement("div");
+        div.className = "admin-row";
+        div.innerHTML = '<div class="admin-info">' + escapeHtml(row.email) + '</div>' +
+          '<button type="button" class="btn btn-small btn-danger" data-remove-allowed="' + escapeHtml(row.email) + '">✕</button>';
+        allowedList.appendChild(div);
+      });
+      allowedList.querySelectorAll("[data-remove-allowed]").forEach(function (btn) {
+        btn.addEventListener("click", async function () {
+          await sb.from("allowed_emails").delete().eq("email", btn.getAttribute("data-remove-allowed"));
+          refreshAdmin();
+        });
+      });
+    }
+  }
+  document.getElementById("btnAddAllowed").addEventListener("click", async function () {
+    var input = document.getElementById("p-allowed-email");
+    var email = input.value.trim().toLowerCase();
+    if (!email) return;
+    var res = await sb.from("allowed_emails").insert({ email: email, added_by: state.userId });
+    if (res.error) { alertFallback("Échec de l'ajout : " + res.error.message); return; }
+    input.value = "";
+    refreshAdmin();
+  });
 
   function subscribeRealtime() {
     if (expensesChannel) sb.removeChannel(expensesChannel);
@@ -1246,20 +1306,37 @@
     sb.auth.signOut();
   });
 
-  function showAuthScreen() {
-    document.getElementById("authScreen").classList.remove("hidden");
+  function hideAllScreens() {
+    document.getElementById("authScreen").classList.add("hidden");
     document.getElementById("appScreen").classList.add("hidden");
+    document.getElementById("pendingApprovalScreen").classList.add("hidden");
   }
+  function showAuthScreen() {
+    hideAllScreens();
+    document.getElementById("authScreen").classList.remove("hidden");
+  }
+  function showPendingScreen() {
+    hideAllScreens();
+    document.getElementById("pendingApprovalScreen").classList.remove("hidden");
+  }
+  document.getElementById("btnPendingLogout").addEventListener("click", function () { sb.auth.signOut(); });
+
   async function showAppScreen(user) {
     state.userId = user.id;
     document.getElementById("userEmail").textContent = user.email;
-    document.getElementById("authScreen").classList.add("hidden");
-    document.getElementById("appScreen").classList.remove("hidden");
-    resetForm();
     await loadProfile();
+    if (!state.profile.isApproved && !state.profile.isAdmin) {
+      showPendingScreen();
+      return;
+    }
+    hideAllScreens();
+    document.getElementById("appScreen").classList.remove("hidden");
+    document.getElementById("tabAdmin").classList.toggle("hidden", !state.profile.isAdmin);
+    resetForm();
     await refreshExpenses();
     await refreshReceipts();
     subscribeRealtime();
+    if (state.profile.isAdmin) refreshAdmin();
   }
 
   // ================= init =================
