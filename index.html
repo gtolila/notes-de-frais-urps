@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Notes de Frais URPS</title>
+<title>Note de frais.app</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -129,6 +129,11 @@
   }
   .brand h1 { font-size: 22px; }
   .brand-sub { margin: 2px 0 0; color: var(--ink-muted); font-size: 13px; }
+  .brand-sub-select {
+    margin: 2px 0 0; color: var(--ink-muted); font-size: 13px; font-family: var(--font-body);
+    border: none; background: transparent; padding: 0; cursor: pointer; appearance: auto;
+  }
+  .brand-sub-select:hover, .brand-sub-select:focus { color: var(--accent-strong); }
 
   .tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 10px; }
   .tab {
@@ -415,8 +420,8 @@
     <div class="brand">
       <span class="brand-mark">NF</span>
       <div>
-        <h1>Notes de frais</h1>
-        <p class="brand-sub" id="brandSub">URPS Chirurgiens-Dentistes PACA</p>
+        <h1>Note de frais.app</h1>
+        <select class="brand-sub-select" id="brandSub" title="Changer d'organisme"></select>
       </div>
     </div>
     <nav class="tabs">
@@ -586,8 +591,11 @@
             <label for="emailBody">Message</label>
             <textarea id="emailBody" rows="7" readonly style="width:100%; resize:vertical; padding:9px 11px; border-radius:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--font-body); font-size:13.5px;"></textarea>
           </div>
-          <button type="button" class="btn btn-primary" id="btnCopyEmail" style="width:100%;">Copier le message</button>
-          <div class="voice-status" id="emailStatus">N'oublie pas de joindre le fichier téléchargé (bouton ci-dessus) à ton mail.</div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" id="btnCopyEmail">Copier le message</button>
+            <button type="button" class="btn" id="btnOpenMail">Ouvrir dans Mail</button>
+          </div>
+          <div class="voice-status" id="emailStatus">Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. N'oublie pas de joindre le fichier téléchargé.</div>
         </div>
       </div>
     </div>
@@ -714,9 +722,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20260918b"></script>
-<script src="jspdf.autotable.min.js?v=20260918b"></script>
-<script src="config.js?v=20260918b"></script>
-<script src="app.js?v=20260918b"></script>
+<script src="jspdf.umd.min.js?v=20260918c"></script>
+<script src="jspdf.autotable.min.js?v=20260918c"></script>
+<script src="config.js?v=20260918c"></script>
+<script src="app.js?v=20260918c"></script>
 </body>
 </html>

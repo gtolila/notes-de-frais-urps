@@ -616,6 +616,36 @@
   }
 
   // ================= profile (incl. signature) =================
+  var ORG_HEADER_PRESETS = ["URPS Chirurgiens-Dentistes PACA", "FSDL PACA"];
+  function renderBrandHeader() {
+    var sel = document.getElementById("brandSub");
+    var current = state.profile.orgHeader || DEFAULT_PROFILE.orgHeader;
+    var opts = ORG_HEADER_PRESETS.slice();
+    if (opts.indexOf(current) === -1) opts.push(current);
+    sel.innerHTML = opts.map(function (p) {
+      return '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + "</option>";
+    }).join("") + '<option value="__custom__">Autre (modifier dans Profil)…</option>';
+    sel.value = current;
+  }
+  document.getElementById("brandSub").addEventListener("change", function () {
+    if (this.value === "__custom__") {
+      document.querySelector('.tab[data-tab="profil"]').click();
+      renderBrandHeader();
+      return;
+    }
+    state.profile.orgHeader = this.value;
+    applyOrgHeaderToProfilForm(this.value);
+    saveProfile(state.profile).catch(function (err) {
+      alertFallback("Échec de l'enregistrement : " + (err.message || "réessaie."));
+    });
+  });
+  function applyOrgHeaderToProfilForm(orgHeader) {
+    var orgSelect = document.getElementById("p-orgheader");
+    var orgCustom = document.getElementById("p-orgheader-custom");
+    var isPreset = Array.prototype.some.call(orgSelect.options, function (o) { return o.value === orgHeader; });
+    if (isPreset) { orgSelect.value = orgHeader; orgCustom.classList.add("hidden"); orgCustom.value = ""; }
+    else { orgSelect.value = "__custom__"; orgCustom.classList.remove("hidden"); orgCustom.value = orgHeader; }
+  }
   function renderProfile() {
     document.getElementById("p-nom").value = state.profile.nom;
     document.getElementById("p-adresse1").value = state.profile.adresse1;
@@ -624,12 +654,8 @@
     document.getElementById("p-kmrate").value = state.profile.kmRate;
     document.getElementById("p-peage").value = state.profile.peageNiceMarseille;
     var orgHeader = state.profile.orgHeader || DEFAULT_PROFILE.orgHeader;
-    document.getElementById("brandSub").textContent = orgHeader;
-    var orgSelect = document.getElementById("p-orgheader");
-    var orgCustom = document.getElementById("p-orgheader-custom");
-    var isPreset = Array.prototype.some.call(orgSelect.options, function (o) { return o.value === orgHeader; });
-    if (isPreset) { orgSelect.value = orgHeader; orgCustom.classList.add("hidden"); orgCustom.value = ""; }
-    else { orgSelect.value = "__custom__"; orgCustom.classList.remove("hidden"); orgCustom.value = orgHeader; }
+    renderBrandHeader();
+    applyOrgHeaderToProfilForm(orgHeader);
     renderRecipients();
     var img = document.getElementById("sigPreview");
     var removeBtn = document.getElementById("btnSigRemove");
@@ -1022,18 +1048,26 @@
 
     document.getElementById("emailSubject").value = subject;
     document.getElementById("emailBody").value = body;
+    document.getElementById("emailStatus").textContent = "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. N'oublie pas de joindre le fichier téléchargé.";
     var panel = document.getElementById("emailPanel");
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
 
+  document.getElementById("btnOpenMail").addEventListener("click", function () {
+    var subject = document.getElementById("emailSubject").value;
+    var body = document.getElementById("emailBody").value;
+    var to = document.getElementById("emailTo").value;
     try {
       var a = document.createElement("a");
-      a.href = "mailto:" + select.value + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+      a.href = "mailto:" + to + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-    } catch (e) {}
+    } catch (e) {
+      alertFallback("Impossible d'ouvrir ton application mail automatiquement — utilise plutôt \"Copier le message\".");
+    }
   });
 
   document.getElementById("btnCopyEmail").addEventListener("click", function () {
