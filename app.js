@@ -1322,21 +1322,31 @@
   document.getElementById("btnPendingLogout").addEventListener("click", function () { sb.auth.signOut(); });
 
   async function showAppScreen(user) {
-    state.userId = user.id;
-    document.getElementById("userEmail").textContent = user.email;
-    await loadProfile();
-    if (!state.profile.isApproved && !state.profile.isAdmin) {
-      showPendingScreen();
-      return;
+    try {
+      state.userId = user.id;
+      document.getElementById("userEmail").textContent = user.email;
+      await loadProfile();
+      if (!state.profile.isApproved && !state.profile.isAdmin) {
+        showPendingScreen();
+        return;
+      }
+      hideAllScreens();
+      document.getElementById("appScreen").classList.remove("hidden");
+      document.getElementById("tabAdmin").classList.toggle("hidden", !state.profile.isAdmin);
+      resetForm();
+      await refreshExpenses();
+      await refreshReceipts();
+      subscribeRealtime();
+      if (state.profile.isAdmin) {
+        refreshAdmin().catch(function (err) { console.error("refreshAdmin failed", err); });
+      }
+    } catch (err) {
+      // Whatever went wrong, never leave the viewer on a blank page.
+      console.error("showAppScreen failed", err);
+      hideAllScreens();
+      document.getElementById("appScreen").classList.remove("hidden");
+      alertFallback("Erreur au chargement : " + (err.message || "réessaie ou recharge la page.") + " (détails dans la console)");
     }
-    hideAllScreens();
-    document.getElementById("appScreen").classList.remove("hidden");
-    document.getElementById("tabAdmin").classList.toggle("hidden", !state.profile.isAdmin);
-    resetForm();
-    await refreshExpenses();
-    await refreshReceipts();
-    subscribeRealtime();
-    if (state.profile.isAdmin) refreshAdmin();
   }
 
   // ================= init =================
