@@ -372,9 +372,18 @@
     return new Blob([arr], { type: mime });
   }
 
+  var WORD_MIME_TYPES = ["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+  function isWordFile(file) {
+    return WORD_MIME_TYPES.indexOf(file.type) >= 0 || /\.docx?$/i.test(file.name || "");
+  }
+
   async function prepareReceiptUpload(file) {
     if (file.type === "application/pdf") {
       return { blob: file, mimeType: "application/pdf", width: 0, height: 0, ext: "pdf" };
+    }
+    if (isWordFile(file)) {
+      var ext = /\.docx$/i.test(file.name || "") ? "docx" : "doc";
+      return { blob: file, mimeType: file.type || "application/msword", width: 0, height: 0, ext: ext };
     }
     var rawDataUrl = await readFileAsDataUrl(file);
     var resized = await resizeImageDataUrl(rawDataUrl, 2000, 0.85);
@@ -391,6 +400,8 @@
       chip.title = r.filename || "Justificatif";
       if (r.mimeType === "application/pdf") {
         chip.innerHTML = '<span class="receipt-pdf-icon">📄</span><button type="button" class="receipt-remove" data-remove-receipt="' + r.id + '">✕</button>';
+      } else if (WORD_MIME_TYPES.indexOf(r.mimeType) >= 0) {
+        chip.innerHTML = '<span class="receipt-pdf-icon">📝</span><button type="button" class="receipt-remove" data-remove-receipt="' + r.id + '">✕</button>';
       } else {
         var img = document.createElement("img");
         getReceiptUrl(r).then(function (url) { img.src = url; });
@@ -429,6 +440,10 @@
       var url = await getReceiptUrl(r);
       if (r.mimeType === "application/pdf") {
         content.innerHTML = '<iframe src="' + url + '" title="' + escapeHtml(r.filename || "Justificatif") + '"></iframe>';
+      } else if (WORD_MIME_TYPES.indexOf(r.mimeType) >= 0) {
+        content.innerHTML = '<div style="background:#fff; padding:24px; border-radius:8px; text-align:center;">' +
+          '<p style="margin-bottom:14px;">' + escapeHtml(r.filename || "Document Word") + '</p>' +
+          '<a href="' + url + '" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir / télécharger</a></div>';
       } else {
         content.innerHTML = '<img src="' + url + '" alt="' + escapeHtml(r.filename || "Justificatif") + '">';
       }
@@ -830,9 +845,9 @@
         doc.setTextColor(20);
         doc.text(displayDate(l.date) + " — " + (l.descriptif || "Justificatif"), margin, 16);
         doc.setFont("helvetica", "normal");
-        if (r.mimeType === "application/pdf") {
+        if (r.mimeType === "application/pdf" || WORD_MIME_TYPES.indexOf(r.mimeType) >= 0) {
           doc.setFontSize(10);
-          doc.text("Justificatif PDF : " + (r.filename || "document.pdf") + " (à joindre séparément à l'envoi)", margin, 26);
+          doc.text("Justificatif : " + (r.filename || "document") + " (à joindre séparément à l'envoi — non affichable ici)", margin, 26);
           continue;
         }
         try {
