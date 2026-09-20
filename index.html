@@ -285,6 +285,7 @@
   .btn-ghost { background: transparent; }
   .btn-small { padding: 6px 10px; font-size: 12px; }
   .btn-danger { color: var(--danger); }
+  .attach-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* ---------- table ---------- */
   .table-card { padding: 0; overflow: hidden; }
@@ -547,8 +548,13 @@
 
         <div class="field">
           <label>Justificatifs</label>
-          <input type="file" id="attachInput" accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" capture="environment" multiple class="hidden">
-          <button type="button" class="btn btn-small" id="btnAttach">📎 Ajouter (photo ou fichier)</button>
+          <input type="file" id="attachInput" accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple class="hidden">
+          <input type="file" id="scanInput" accept="image/*" capture="environment" multiple class="hidden">
+          <div class="attach-btn-row">
+            <button type="button" class="btn btn-small" id="btnAttach">📎 Ajouter (photo ou fichier)</button>
+            <button type="button" class="btn btn-small" id="btnScan">📷 Scanner avec mon iPhone</button>
+          </div>
+          <div class="helper">Pour scanner : dans l'appareil photo, touche l'icône de scan en bas pour détourer automatiquement le document.</div>
           <div class="helper" id="receiptStatus"></div>
           <div class="receipt-list" id="receiptList"></div>
         </div>
@@ -767,9 +773,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20260918j"></script>
-<script src="jspdf.autotable.min.js?v=20260918j"></script>
-<script src="config.js?v=20260918j"></script>
-<script src="app.js?v=20260918j"></script>
+<script src="jspdf.umd.min.js?v=20260918k"></script>
+<script src="jspdf.autotable.min.js?v=20260918k"></script>
+<script src="config.js?v=20260918k"></script>
+<script src="app.js?v=20260918k"></script>
 </body>
 </html>

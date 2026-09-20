@@ -477,10 +477,8 @@
   document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
   document.getElementById("lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
 
-  document.getElementById("btnAttach").addEventListener("click", function () { document.getElementById("attachInput").click(); });
-  document.getElementById("attachInput").addEventListener("change", function (e) {
-    var files = Array.prototype.slice.call(e.target.files || []);
-    e.target.value = "";
+  function handleAttachFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
     var status = document.getElementById("receiptStatus");
     files.reduce(function (chain, file) {
       return chain.then(async function () {
@@ -502,6 +500,18 @@
         }
       });
     }, Promise.resolve());
+  }
+
+  document.getElementById("btnAttach").addEventListener("click", function () { document.getElementById("attachInput").click(); });
+  document.getElementById("attachInput").addEventListener("change", function (e) {
+    handleAttachFiles(e.target.files);
+    e.target.value = "";
+  });
+
+  document.getElementById("btnScan").addEventListener("click", function () { document.getElementById("scanInput").click(); });
+  document.getElementById("scanInput").addEventListener("change", function (e) {
+    handleAttachFiles(e.target.files);
+    e.target.value = "";
   });
 
   async function removeReceipt(id) {
