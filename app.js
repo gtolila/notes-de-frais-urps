@@ -624,6 +624,7 @@
     document.getElementById("p-kmrate").value = state.profile.kmRate;
     document.getElementById("p-peage").value = state.profile.peageNiceMarseille;
     var orgHeader = state.profile.orgHeader || DEFAULT_PROFILE.orgHeader;
+    document.getElementById("brandSub").textContent = orgHeader;
     var orgSelect = document.getElementById("p-orgheader");
     var orgCustom = document.getElementById("p-orgheader-custom");
     var isPreset = Array.prototype.some.call(orgSelect.options, function (o) { return o.value === orgHeader; });
