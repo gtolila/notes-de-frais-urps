@@ -22,7 +22,7 @@
   var MONTHS_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 
   var state = {
-    profile: Object.assign({}, DEFAULT_PROFILE),
+    profile: Object.assign({}, DEFAULT_PROFILE, { recipients: DEFAULT_PROFILE.recipients.map(function (r) { return Object.assign({}, r); }) }),
     expenses: [],
     receipts: [],
     activeTab: "saisie",
@@ -661,7 +661,8 @@
 
   // ---- recipients (destinataires) ----
   function recipientsList() {
-    return (state.profile.recipients && state.profile.recipients.length) ? state.profile.recipients : DEFAULT_PROFILE.recipients;
+    if (state.profile.recipients && state.profile.recipients.length) return state.profile.recipients;
+    return DEFAULT_PROFILE.recipients.map(function (r) { return Object.assign({}, r); });
   }
   function defaultRecipientEmail() {
     var list = recipientsList();
@@ -1076,10 +1077,10 @@
     };
   }
   function rowToProfile(row) {
-    if (!row) return Object.assign({}, DEFAULT_PROFILE);
+    if (!row) return Object.assign({}, DEFAULT_PROFILE, { recipients: DEFAULT_PROFILE.recipients.map(function (r) { return Object.assign({}, r); }) });
     return {
       nom: row.nom || "", adresse1: row.adresse1 || "", adresse2: row.adresse2 || "",
-      recipients: (row.recipients && row.recipients.length) ? row.recipients : DEFAULT_PROFILE.recipients,
+      recipients: (row.recipients && row.recipients.length) ? row.recipients : DEFAULT_PROFILE.recipients.map(function (r) { return Object.assign({}, r); }),
       orgHeader: row.org_header || DEFAULT_PROFILE.orgHeader,
       kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
       vehicleType: row.vehicle_type || "Auto", peageNiceMarseille: row.peage_nice_marseille || DEFAULT_PROFILE.peageNiceMarseille,
