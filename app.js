@@ -432,21 +432,40 @@
     return data.signedUrl;
   }
 
+  async function downloadReceiptFile(r) {
+    try {
+      var url = await getReceiptUrl(r);
+      var resp = await fetch(url);
+      var blob = await resp.blob();
+      var defaultExt = r.mimeType === "application/pdf" ? "pdf" : WORD_MIME_TYPES.indexOf(r.mimeType) >= 0 ? "docx" : "jpg";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = r.filename || ("justificatif." + defaultExt);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    } catch (err) {
+      alertFallback("Échec du téléchargement : " + (err.message || "réessaie."));
+    }
+  }
+
   async function openLightbox(r) {
     var content = document.getElementById("lightboxContent");
     content.innerHTML = "Chargement…";
     document.getElementById("lightbox").classList.remove("hidden");
     try {
       var url = await getReceiptUrl(r);
+      var preview;
       if (r.mimeType === "application/pdf") {
-        content.innerHTML = '<iframe src="' + url + '" title="' + escapeHtml(r.filename || "Justificatif") + '"></iframe>';
+        preview = '<iframe src="' + url + '" title="' + escapeHtml(r.filename || "Justificatif") + '"></iframe>';
       } else if (WORD_MIME_TYPES.indexOf(r.mimeType) >= 0) {
-        content.innerHTML = '<div style="background:#fff; padding:24px; border-radius:8px; text-align:center;">' +
-          '<p style="margin-bottom:14px;">' + escapeHtml(r.filename || "Document Word") + '</p>' +
-          '<a href="' + url + '" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir / télécharger</a></div>';
+        preview = '<div style="background:#fff; padding:24px; border-radius:8px; text-align:center; max-width:320px;"><p>' + escapeHtml(r.filename || "Document Word") + "</p></div>";
       } else {
-        content.innerHTML = '<img src="' + url + '" alt="' + escapeHtml(r.filename || "Justificatif") + '">';
+        preview = '<img src="' + url + '" alt="' + escapeHtml(r.filename || "Justificatif") + '">';
       }
+      content.innerHTML = preview + '<div style="text-align:center; margin-top:12px;"><button type="button" class="btn btn-primary" id="btnDownloadReceipt">Télécharger ce fichier</button></div>';
+      document.getElementById("btnDownloadReceipt").addEventListener("click", function () { downloadReceiptFile(r); });
     } catch (err) {
       content.innerHTML = "Impossible de charger ce fichier.";
     }
@@ -1030,6 +1049,29 @@
     saveCsv("note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".csv", rows);
   });
 
+  document.getElementById("btnDownloadReceiptsMonth").addEventListener("click", async function () {
+    var btn = this;
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var jobs = [];
+    lines.forEach(function (l) {
+      receiptsFor(l.id).forEach(function (r) {
+        jobs.push({ line: l, receipt: r });
+      });
+    });
+    if (!jobs.length) { alertFallback("Aucun justificatif ce mois-ci."); return; }
+    btn.disabled = true;
+    var oldText = btn.textContent;
+    for (var i = 0; i < jobs.length; i++) {
+      btn.textContent = "Téléchargement " + (i + 1) + "/" + jobs.length + "…";
+      var ext = jobs[i].receipt.mimeType === "application/pdf" ? "pdf" : WORD_MIME_TYPES.indexOf(jobs[i].receipt.mimeType) >= 0 ? "docx" : "jpg";
+      var name = jobs[i].line.date + "-" + slugify(jobs[i].line.descriptif || "justificatif") + "-" + (i + 1) + "." + ext;
+      await downloadReceiptFile(Object.assign({}, jobs[i].receipt, { filename: name }));
+      await new Promise(function (resolve) { setTimeout(resolve, 350); });
+    }
+    btn.textContent = oldText;
+    btn.disabled = false;
+  });
+
   document.getElementById("btnCsvYear").addEventListener("click", function () {
     var y = state.recapYear;
     var rows = [["Récapitulatif annuel", state.profile.nom, y], [], ["Mois","Indemnités","Frais","Total"]];
@@ -1066,7 +1108,7 @@
 
     document.getElementById("emailSubject").value = subject;
     document.getElementById("emailBody").value = body;
-    document.getElementById("emailStatus").textContent = "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. N'oublie pas de joindre le fichier téléchargé.";
+    document.getElementById("emailStatus").textContent = "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. Joins toi-même le PDF (bouton \"Télécharger en PDF\") et, si tu as des justificatifs PDF/Word, télécharge-les aussi (\"Télécharger les justificatifs\") pour les joindre.";
     var panel = document.getElementById("emailPanel");
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
