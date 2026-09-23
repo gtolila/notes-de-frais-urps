@@ -89,8 +89,10 @@
   }
   function linesForMonth(y, m) {
     var key = monthKey(y, m);
-    return state.expenses.filter(function (l) { return (l.date || "").slice(0, 7) === key; })
-      .sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var org = state.profile.orgHeader || DEFAULT_PROFILE.orgHeader;
+    return state.expenses.filter(function (l) {
+      return (l.date || "").slice(0, 7) === key && (l.orgHeader || DEFAULT_PROFILE.orgHeader) === org;
+    }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
   }
   function sumLines(lines) {
     var frais = 0, indem = 0;
@@ -145,7 +147,8 @@
       trajetRate: TRAJET_RATES[document.getElementById("f-trajet").value],
       demiJournees: num(document.getElementById("f-demi").value),
       visio: num(document.getElementById("f-visio").value),
-      forfaitRate: FORFAIT_RATE
+      forfaitRate: FORFAIT_RATE,
+      orgHeader: state.profile.orgHeader || DEFAULT_PROFILE.orgHeader
     };
   }
   function updatePreview() {
@@ -682,6 +685,7 @@
     }
     state.profile.orgHeader = this.value;
     applyOrgHeaderToProfilForm(this.value);
+    renderSaisie(); renderRecap();
     saveProfile(state.profile).catch(function (err) {
       alertFallback("Échec de l'enregistrement : " + (err.message || "réessaie."));
     });
@@ -797,6 +801,7 @@
       signatureDataUrl: state.profile.signatureDataUrl || null
     };
     state.profile = p;
+    renderBrandHeader(); renderSaisie(); renderRecap();
     saveProfile(p).then(function () {
       var saved = document.getElementById("profileSaved");
       saved.classList.remove("hidden");
@@ -1163,7 +1168,8 @@
       transport: row.transport, km: row.km, kmRate: row.km_rate,
       parking: row.parking, hotel: row.hotel, repas: row.repas, divers: row.divers,
       trajet: row.trajet, trajetRate: row.trajet_rate,
-      demiJournees: row.demi_journees, visio: row.visio, forfaitRate: row.forfait_rate
+      demiJournees: row.demi_journees, visio: row.visio, forfaitRate: row.forfait_rate,
+      orgHeader: row.org_header || DEFAULT_PROFILE.orgHeader
     };
   }
   function expenseToRow(id, l) {
@@ -1172,7 +1178,8 @@
       transport: l.transport, km: l.km, km_rate: l.kmRate,
       parking: l.parking, hotel: l.hotel, repas: l.repas, divers: l.divers,
       trajet: l.trajet, trajet_rate: l.trajetRate,
-      demi_journees: l.demiJournees, visio: l.visio, forfait_rate: l.forfaitRate
+      demi_journees: l.demiJournees, visio: l.visio, forfait_rate: l.forfaitRate,
+      org_header: l.orgHeader || DEFAULT_PROFILE.orgHeader
     };
   }
   function rowToReceipt(row) {

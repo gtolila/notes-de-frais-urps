@@ -42,6 +42,7 @@ create table if not exists public.expenses (
   demi_journees numeric not null default 0,
   visio numeric not null default 0,
   forfait_rate numeric not null default 276,
+  org_header text not null default 'URPS Chirurgiens-Dentistes PACA',
   created_at timestamptz not null default now()
 );
 
