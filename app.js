@@ -34,7 +34,8 @@
     recapYear: new Date().getFullYear(),
     editingId: null,
     draftId: null,
-    userId: null
+    userId: null,
+    selectedIds: {}
   };
 
   var sb = null;             // Supabase client
@@ -125,6 +126,7 @@
     var d = new Date(state.viewYear, state.viewMonth - 1 + delta, 1);
     state.viewYear = d.getFullYear();
     state.viewMonth = d.getMonth() + 1;
+    state.selectedIds = {};
     if (pendingMonthPdf) resetMonthPdfButton();
     renderSaisie();
   }
@@ -543,6 +545,9 @@
     document.getElementById("tableMonthTitle").textContent = "Dépenses — " + label;
 
     var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var visibleIds = {};
+    lines.forEach(function (l) { visibleIds[l.id] = true; });
+    Object.keys(state.selectedIds).forEach(function (id) { if (!visibleIds[id]) delete state.selectedIds[id]; });
     var sums = sumLines(lines);
     document.getElementById("statFrais").textContent = euro(sums.frais);
     document.getElementById("statIndem").textContent = euro(sums.indem);
@@ -567,15 +572,17 @@
     tbody.innerHTML = ""; cards.innerHTML = "";
 
     if (!lines.length) {
-      tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Aucune dépense saisie pour ce mois.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="16" class="empty-state">Aucune dépense saisie pour ce mois.</td></tr>';
       tfoot.innerHTML = "";
     } else {
       lines.forEach(function (l) {
         var c = computeLine(l);
         var receiptCount = receiptsFor(l.id).length;
         var receiptBadge = receiptCount ? '<button type="button" class="row-receipt-badge" data-edit="' + l.id + '">📎 ' + receiptCount + '</button>' : "";
+        var checked = state.selectedIds[l.id] ? " checked" : "";
         var tr = document.createElement("tr");
         tr.innerHTML =
+          '<td class="select-col"><input type="checkbox" class="line-select" data-select="' + l.id + '"' + checked + "></td>" +
           "<td>" + displayDate(l.date) + "</td>" +
           '<td class="wrap">' + escapeHtml(l.descriptif || "—") + "</td>" +
           '<td class="num">' + euro(l.transport) + "</td>" +
@@ -599,7 +606,7 @@
         var card = document.createElement("div");
         card.className = "line-card";
         card.innerHTML =
-          '<div class="line-card-top"><span class="line-card-date">' + displayDate(l.date) + '</span><span class="line-card-total">' + euro(c.total) + "</span></div>" +
+          '<div class="line-card-top"><input type="checkbox" class="line-select" data-select="' + l.id + '"' + checked + '><span class="line-card-date">' + displayDate(l.date) + '</span><span class="line-card-total">' + euro(c.total) + "</span></div>" +
           '<div class="line-card-desc">' + escapeHtml(l.descriptif || "—") + "</div>" +
           '<div class="line-card-grid">' +
             '<div><span class="lbl">Frais </span>' + euro(c.frais) + "</div>" +
@@ -612,7 +619,7 @@
         cards.appendChild(card);
       });
       tfoot.innerHTML =
-        '<tr><td colspan="4">Totaux</td>' +
+        '<tr><td colspan="5">Totaux</td>' +
         '<td class="num">' + euro(lines.reduce(function (s, l) { return s + computeLine(l).fraisKm; }, 0)) + "</td>" +
         '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.parking); }, 0)) + "</td>" +
         '<td class="num">' + euro(lines.reduce(function (s, l) { return s + num(l.hotel); }, 0)) + "</td>" +
@@ -629,7 +636,44 @@
     tbody.querySelectorAll("[data-del]").forEach(function (b) { b.addEventListener("click", function () { deleteLine(b.getAttribute("data-del")); }); });
     cards.querySelectorAll("[data-edit]").forEach(function (b) { b.addEventListener("click", function () { editLine(b.getAttribute("data-edit")); }); });
     cards.querySelectorAll("[data-del]").forEach(function (b) { b.addEventListener("click", function () { deleteLine(b.getAttribute("data-del")); }); });
+    tbody.querySelectorAll(".line-select").forEach(function (cb) {
+      cb.addEventListener("change", function () { toggleLineSelect(cb.getAttribute("data-select"), cb.checked); });
+    });
+    cards.querySelectorAll(".line-select").forEach(function (cb) {
+      cb.addEventListener("change", function () { toggleLineSelect(cb.getAttribute("data-select"), cb.checked); });
+    });
+    var selCount = Object.keys(state.selectedIds).length;
+    var selectAll = document.getElementById("selectAllLines");
+    selectAll.checked = lines.length > 0 && selCount === lines.length;
+    selectAll.indeterminate = selCount > 0 && selCount < lines.length;
+    updateSelectionButton();
   }
+
+  function toggleLineSelect(id, checked) {
+    if (checked) state.selectedIds[id] = true; else delete state.selectedIds[id];
+    var selCount = Object.keys(state.selectedIds).length;
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var selectAll = document.getElementById("selectAllLines");
+    selectAll.checked = lines.length > 0 && selCount === lines.length;
+    selectAll.indeterminate = selCount > 0 && selCount < lines.length;
+    document.querySelectorAll('.line-select[data-select="' + id + '"]').forEach(function (cb) { cb.checked = checked; });
+    updateSelectionButton();
+  }
+
+  function updateSelectionButton() {
+    var count = Object.keys(state.selectedIds).length;
+    var btn = document.getElementById("btnDownloadReceiptsSelection");
+    btn.classList.toggle("hidden", count === 0);
+    btn.textContent = "Télécharger la sélection (" + count + ")";
+  }
+
+  document.getElementById("selectAllLines").addEventListener("change", function () {
+    var checked = this.checked;
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    state.selectedIds = {};
+    if (checked) lines.forEach(function (l) { state.selectedIds[l.id] = true; });
+    renderSaisie();
+  });
 
   // ================= rendering: Récapitulatif =================
   function renderRecap() {
@@ -685,6 +729,7 @@
     }
     state.profile.orgHeader = this.value;
     applyOrgHeaderToProfilForm(this.value);
+    state.selectedIds = {};
     renderSaisie(); renderRecap();
     saveProfile(state.profile).catch(function (err) {
       alertFallback("Échec de l'enregistrement : " + (err.message || "réessaie."));
@@ -801,6 +846,7 @@
       signatureDataUrl: state.profile.signatureDataUrl || null
     };
     state.profile = p;
+    state.selectedIds = {};
     renderBrandHeader(); renderSaisie(); renderRecap();
     saveProfile(p).then(function () {
       var saved = document.getElementById("profileSaved");
@@ -1064,16 +1110,14 @@
     saveCsv("note-de-frais-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".csv", rows);
   });
 
-  document.getElementById("btnDownloadReceiptsMonth").addEventListener("click", async function () {
-    var btn = this;
-    var lines = linesForMonth(state.viewYear, state.viewMonth);
+  async function downloadReceiptsForLines(lines, btn, emptyMessage) {
     var jobs = [];
     lines.forEach(function (l) {
       receiptsFor(l.id).forEach(function (r) {
         jobs.push({ line: l, receipt: r });
       });
     });
-    if (!jobs.length) { alertFallback("Aucun justificatif ce mois-ci."); return; }
+    if (!jobs.length) { alertFallback(emptyMessage); return; }
     btn.disabled = true;
     var oldText = btn.textContent;
     for (var i = 0; i < jobs.length; i++) {
@@ -1085,6 +1129,16 @@
     }
     btn.textContent = oldText;
     btn.disabled = false;
+  }
+
+  document.getElementById("btnDownloadReceiptsMonth").addEventListener("click", function () {
+    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    downloadReceiptsForLines(lines, this, "Aucun justificatif ce mois-ci.");
+  });
+
+  document.getElementById("btnDownloadReceiptsSelection").addEventListener("click", function () {
+    var lines = linesForMonth(state.viewYear, state.viewMonth).filter(function (l) { return state.selectedIds[l.id]; });
+    downloadReceiptsForLines(lines, this, "Aucun justificatif sur les lignes sélectionnées.");
   });
 
   document.getElementById("btnCsvYear").addEventListener("click", function () {
