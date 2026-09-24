@@ -483,9 +483,28 @@
   document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
   document.getElementById("lightbox").addEventListener("click", function (e) { if (e.target.id === "lightbox") closeLightbox(); });
 
-  function handleAttachFiles(fileList) {
+  async function ensureDraftSaved() {
+    if (state.editingId) return true;
+    var l = readForm();
+    if (!l.date) { document.getElementById("f-date").focus(); return false; }
+    await upsertExpense(state.draftId, l);
+    state.editingId = state.draftId;
+    document.getElementById("formTitle").textContent = "Modifier la dépense";
+    document.getElementById("submitBtn").textContent = "Enregistrer";
+    document.getElementById("cancelEdit").classList.remove("hidden");
+    return true;
+  }
+
+  async function handleAttachFiles(fileList) {
     var files = Array.prototype.slice.call(fileList || []);
     var status = document.getElementById("receiptStatus");
+    try {
+      var saved = await ensureDraftSaved();
+    } catch (err) {
+      status.textContent = "Échec de l'enregistrement automatique de la ligne : " + (err.message || "réessaie.");
+      return;
+    }
+    if (!saved) { status.textContent = "Indique une date pour la ligne avant d'ajouter un justificatif."; return; }
     files.reduce(function (chain, file) {
       return chain.then(async function () {
         status.textContent = "Envoi de " + file.name + "…";
