@@ -1198,13 +1198,21 @@
   });
 
   document.getElementById("btnEmailMonth").addEventListener("click", function () {
-    var lines = linesForMonth(state.viewYear, state.viewMonth);
+    var selCount = Object.keys(state.selectedIds).length;
+    var allLines = linesForMonth(state.viewYear, state.viewMonth);
+    var lines = selCount ? allLines.filter(function (l) { return state.selectedIds[l.id]; }) : allLines;
     var sums = sumLines(lines);
     var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
-    var subject = "Note de frais - " + label + " - " + state.profile.nom;
-    var body = "Bonjour,\n\nVeuillez trouver ci-joint ma note de frais pour " + label + " (PDF téléchargé via le bouton \"Télécharger en PDF\").\n\n" +
-      "Total frais : " + euro(sums.frais) + "\nTotal indemnités : " + euro(sums.indem) + "\nDépenses totales : " + euro(sums.total) +
-      "\n\nCordialement,\n" + state.profile.nom;
+    var subject = selCount
+      ? "Note de frais - " + lines.length + " ligne(s) - " + label + " - " + state.profile.nom
+      : "Note de frais - " + label + " - " + state.profile.nom;
+    var body = selCount
+      ? "Bonjour,\n\nVeuillez trouver ci-joint ma note de frais pour " + lines.length + " ligne(s) sélectionnée(s) de " + label + " (PDF téléchargé via le bouton \"Télécharger la note (sélection)\").\n\n" +
+        "Total frais : " + euro(sums.frais) + "\nTotal indemnités : " + euro(sums.indem) + "\nDépenses totales : " + euro(sums.total) +
+        "\n\nCordialement,\n" + state.profile.nom
+      : "Bonjour,\n\nVeuillez trouver ci-joint ma note de frais pour " + label + " (PDF téléchargé via le bouton \"Télécharger en PDF\").\n\n" +
+        "Total frais : " + euro(sums.frais) + "\nTotal indemnités : " + euro(sums.indem) + "\nDépenses totales : " + euro(sums.total) +
+        "\n\nCordialement,\n" + state.profile.nom;
 
     var select = document.getElementById("emailTo");
     select.innerHTML = "";
@@ -1217,7 +1225,9 @@
 
     document.getElementById("emailSubject").value = subject;
     document.getElementById("emailBody").value = body;
-    document.getElementById("emailStatus").textContent = "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. Joins toi-même le PDF (bouton \"Télécharger en PDF\") et, si tu as des justificatifs PDF/Word, télécharge-les aussi (\"Télécharger les justificatifs\") pour les joindre.";
+    document.getElementById("emailStatus").textContent = selCount
+      ? "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. Joins toi-même le(s) PDF (bouton \"Télécharger la note (sélection)\") et, si besoin, les justificatifs (\"Télécharger les justificatifs (sélection)\") pour les joindre."
+      : "Choisis le destinataire ci-dessus, puis copie le message ou ouvre-le dans ton appli mail. Joins toi-même le PDF (bouton \"Télécharger en PDF\") et, si tu as des justificatifs PDF/Word, télécharge-les aussi (\"Télécharger les justificatifs\") pour les joindre.";
     var panel = document.getElementById("emailPanel");
     panel.classList.remove("hidden");
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
