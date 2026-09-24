@@ -663,9 +663,11 @@
 
   function updateSelectionButton() {
     var count = Object.keys(state.selectedIds).length;
-    var btn = document.getElementById("btnDownloadReceiptsSelection");
-    btn.classList.toggle("hidden", count === 0);
-    btn.textContent = "Télécharger la sélection (" + count + ")";
+    var receiptsBtn = document.getElementById("btnDownloadReceiptsSelection");
+    receiptsBtn.classList.toggle("hidden", count === 0);
+    receiptsBtn.textContent = "Télécharger les justificatifs (" + count + ")";
+    resetSelectionPdfButton();
+    document.getElementById("btnPrintSelection").classList.toggle("hidden", count === 0);
   }
 
   document.getElementById("selectAllLines").addEventListener("change", function () {
@@ -1073,6 +1075,36 @@
     } catch (err) {
       alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
       resetMonthPdfButton();
+    }
+  });
+
+  var pendingSelectionPdf = null;
+  function resetSelectionPdfButton() {
+    pendingSelectionPdf = null;
+    var btn = document.getElementById("btnPrintSelection");
+    btn.textContent = "Télécharger la note (" + Object.keys(state.selectedIds).length + ")";
+    btn.disabled = false;
+  }
+  document.getElementById("btnPrintSelection").addEventListener("click", async function () {
+    var btn = this;
+    if (pendingSelectionPdf) {
+      pendingSelectionPdf.doc.save(pendingSelectionPdf.filename);
+      resetSelectionPdfButton();
+      return;
+    }
+    var lines = linesForMonth(state.viewYear, state.viewMonth).filter(function (l) { return state.selectedIds[l.id]; });
+    if (!lines.length) { alertFallback("Aucune ligne sélectionnée."); return; }
+    btn.textContent = "Génération…"; btn.disabled = true;
+    try {
+      var sums = sumLines(lines);
+      var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
+      var doc = await buildNoteDoc(lines, sums, "Note de frais (sélection) — " + state.profile.nom + " — " + label);
+      pendingSelectionPdf = { doc: doc, filename: "note-de-frais-selection-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".pdf" };
+      btn.textContent = "✓ Cliquer pour télécharger";
+      btn.disabled = false;
+    } catch (err) {
+      alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
+      resetSelectionPdfButton();
     }
   });
 
