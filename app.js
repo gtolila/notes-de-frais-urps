@@ -105,6 +105,7 @@
     var b = document.getElementById("storageBanner");
     document.getElementById("storageBannerText").textContent = "⚠ " + msg;
     b.classList.remove("hidden");
+    b.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(function () { b.classList.add("hidden"); }, 5000);
   }
 
