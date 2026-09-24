@@ -1088,7 +1088,11 @@
   document.getElementById("btnPrintSelection").addEventListener("click", async function () {
     var btn = this;
     if (pendingSelectionPdf) {
-      pendingSelectionPdf.doc.save(pendingSelectionPdf.filename);
+      var docs = pendingSelectionPdf;
+      for (var i = 0; i < docs.length; i++) {
+        docs[i].doc.save(docs[i].filename);
+        await new Promise(function (resolve) { setTimeout(resolve, 350); });
+      }
       resetSelectionPdfButton();
       return;
     }
@@ -1096,11 +1100,14 @@
     if (!lines.length) { alertFallback("Aucune ligne sélectionnée."); return; }
     btn.textContent = "Génération…"; btn.disabled = true;
     try {
-      var sums = sumLines(lines);
-      var label = MONTHS_FR[state.viewMonth - 1] + " " + state.viewYear;
-      var doc = await buildNoteDoc(lines, sums, "Note de frais (sélection) — " + state.profile.nom + " — " + label);
-      pendingSelectionPdf = { doc: doc, filename: "note-de-frais-selection-" + slugify(state.profile.nom) + "-" + monthKey(state.viewYear, state.viewMonth) + ".pdf" };
-      btn.textContent = "✓ Cliquer pour télécharger";
+      var generated = [];
+      for (var j = 0; j < lines.length; j++) {
+        var l = lines[j];
+        var doc = await buildNoteDoc([l], sumLines([l]), "Note de frais — " + state.profile.nom + " — " + displayDate(l.date));
+        generated.push({ doc: doc, filename: "note-de-frais-" + l.date + "-" + slugify(l.descriptif || "ligne") + ".pdf" });
+      }
+      pendingSelectionPdf = generated;
+      btn.textContent = "✓ Cliquer pour tout télécharger (" + generated.length + ")";
       btn.disabled = false;
     } catch (err) {
       alertFallback("Échec de la génération du PDF : " + (err.message || "réessaie."));
