@@ -14,7 +14,8 @@
     kmRate: 0.697,
     vehicleType: "Auto",
     peageNiceMarseille: 42.4,
-    signatureDataUrl: null
+    signatureDataUrl: null,
+    logoDataUrl: null
   };
   var TRAJET_RATES = { none: 0, lt1h: 65, h1_2: 130, h2_6: 260 };
   var TRAJET_LABELS = { none: "Aucun", lt1h: "< 1h", h1_2: "1-2h", h2_6: "2-6h" };
@@ -369,6 +370,54 @@
       img.src = sourceDataUrl;
     });
   }
+  function resizeLogoDataUrl(sourceDataUrl, maxDim) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onerror = function () { reject(new Error("Image illisible.")); };
+      img.onload = function () {
+        var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve({ dataUrl: canvas.toDataURL("image/png"), width: w, height: h });
+      };
+      img.src = sourceDataUrl;
+    });
+  }
+  function loadImageMeta(dataUrl) {
+    return new Promise(function (resolve) {
+      if (!dataUrl) { resolve(null); return; }
+      var img = new Image();
+      img.onload = function () { resolve({ dataUrl: dataUrl, width: img.width, height: img.height }); };
+      img.onerror = function () { resolve(null); };
+      img.src = dataUrl;
+    });
+  }
+
+  // ================= org header default logos (bundled, shared by all users) =================
+  var ORG_HEADER_LOGO_FILES = {
+    "URPS Chirurgiens-Dentistes PACA": "logo-urps.png",
+    "FSDL PACA": "logo-fsdl.png"
+  };
+  var orgLogoCache = {};
+  function preloadOrgLogos() {
+    Object.keys(ORG_HEADER_LOGO_FILES).forEach(function (key) {
+      fetch(ORG_HEADER_LOGO_FILES[key])
+        .then(function (r) { if (!r.ok) throw new Error("logo introuvable"); return r.blob(); })
+        .then(readFileAsDataUrl)
+        .then(loadImageMeta)
+        .then(function (meta) { if (meta) orgLogoCache[key] = meta; })
+        .catch(function () {});
+    });
+  }
+  var customLogoMeta = null;
+  async function refreshCustomLogoMeta() {
+    customLogoMeta = await loadImageMeta(state.profile.logoDataUrl);
+  }
+
   function dataUrlToBlob(dataUrl) {
     var parts = dataUrl.split(",");
     var mime = parts[0].match(/:(.*?);/)[1];
@@ -784,6 +833,15 @@
       img.classList.add("hidden"); img.src = "";
       removeBtn.classList.add("hidden");
     }
+    var logoImg = document.getElementById("logoPreview");
+    var logoRemoveBtn = document.getElementById("btnLogoRemove");
+    if (state.profile.logoDataUrl) {
+      logoImg.src = state.profile.logoDataUrl; logoImg.classList.remove("hidden");
+      logoRemoveBtn.classList.remove("hidden");
+    } else {
+      logoImg.classList.add("hidden"); logoImg.src = "";
+      logoRemoveBtn.classList.add("hidden");
+    }
   }
   document.getElementById("btnSigUpload").addEventListener("click", function () { document.getElementById("sigInput").click(); });
   document.getElementById("sigInput").addEventListener("change", async function (e) {
@@ -801,6 +859,27 @@
   });
   document.getElementById("btnSigRemove").addEventListener("click", function () {
     state.profile.signatureDataUrl = null;
+    renderProfile();
+  });
+
+  document.getElementById("btnLogoUpload").addEventListener("click", function () { document.getElementById("logoInput").click(); });
+  document.getElementById("logoInput").addEventListener("change", async function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      var rawDataUrl = await readFileAsDataUrl(file);
+      var resized = await resizeLogoDataUrl(rawDataUrl, 400);
+      state.profile.logoDataUrl = resized.dataUrl;
+      customLogoMeta = { dataUrl: resized.dataUrl, width: resized.width, height: resized.height };
+      renderProfile();
+    } catch (err) {
+      alertFallback("Impossible de lire cette image, réessaie.");
+    }
+  });
+  document.getElementById("btnLogoRemove").addEventListener("click", function () {
+    state.profile.logoDataUrl = null;
+    customLogoMeta = null;
     renderProfile();
   });
 
@@ -865,7 +944,8 @@
       vehicleType: document.getElementById("p-vehicule").value,
       kmRate: num(document.getElementById("p-kmrate").value) || DEFAULT_PROFILE.kmRate,
       peageNiceMarseille: num(document.getElementById("p-peage").value) || 0,
-      signatureDataUrl: state.profile.signatureDataUrl || null
+      signatureDataUrl: state.profile.signatureDataUrl || null,
+      logoDataUrl: state.profile.logoDataUrl || null
     };
     state.profile = p;
     state.selectedIds = {};
@@ -892,6 +972,15 @@
     doc.setTextColor(90);
     doc.text(state.profile.orgHeader || DEFAULT_PROFILE.orgHeader, margin, 24);
     doc.setTextColor(20);
+
+    var logo = customLogoMeta || orgLogoCache[state.profile.orgHeader || DEFAULT_PROFILE.orgHeader];
+    if (logo && logo.dataUrl && logo.width && logo.height) {
+      var pageWidth = doc.internal.pageSize.getWidth();
+      var maxW = 28, maxH = 14;
+      var scale = Math.min(maxW / logo.width, maxH / logo.height);
+      var w = logo.width * scale, h = logo.height * scale;
+      try { doc.addImage(logo.dataUrl, "PNG", pageWidth - margin - w, 6, w, h); } catch (e) { /* skip broken logo */ }
+    }
   }
   function pdfIdentityBlock(doc, margin, startY) {
     doc.setFont("helvetica", "normal");
@@ -1320,6 +1409,7 @@
       kmRate: row.km_rate || DEFAULT_PROFILE.kmRate,
       vehicleType: row.vehicle_type || "Auto", peageNiceMarseille: row.peage_nice_marseille || DEFAULT_PROFILE.peageNiceMarseille,
       signatureDataUrl: row.signature_data_url || null,
+      logoDataUrl: row.logo_data_url || null,
       email: row.email || "", isApproved: !!row.is_approved, isAdmin: !!row.is_admin
     };
   }
@@ -1353,7 +1443,7 @@
       id: state.userId, nom: p.nom, adresse1: p.adresse1, adresse2: p.adresse2,
       recipients: p.recipients, org_header: p.orgHeader,
       km_rate: p.kmRate, vehicle_type: p.vehicleType, peage_nice_marseille: p.peageNiceMarseille,
-      signature_data_url: p.signatureDataUrl, updated_at: new Date().toISOString()
+      signature_data_url: p.signatureDataUrl, logo_data_url: p.logoDataUrl, updated_at: new Date().toISOString()
     };
     var res = await sb.from("profiles").upsert(row);
     if (res.error) throw res.error;
@@ -1362,6 +1452,7 @@
     var res = await sb.from("profiles").select("*").eq("id", state.userId).maybeSingle();
     if (res.error) { alertFallback("Erreur de chargement du profil."); return; }
     state.profile = rowToProfile(res.data);
+    await refreshCustomLogoMeta();
     renderProfile();
   }
 
@@ -1552,6 +1643,7 @@
     renderRecap();
     renderProfile();
     initMic();
+    preloadOrgLogos();
 
     if (!window.SUPABASE_URL || !window.supabase || window.SUPABASE_URL.indexOf("xxxx") >= 0) {
       showAuthError("Configuration manquante : édite config.js avec l'URL et la clé Supabase du projet.");

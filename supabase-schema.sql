@@ -12,6 +12,7 @@ create table if not exists public.profiles (
   vehicle_type text not null default 'Auto',
   peage_nice_marseille numeric not null default 42.4,
   signature_data_url text,
+  logo_data_url text,
   updated_at timestamptz not null default now()
 );
 

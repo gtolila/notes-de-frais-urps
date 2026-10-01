@@ -725,6 +725,16 @@
           </div>
           <div class="helper">Utilisée sur tes PDF téléchargés (note et récapitulatif).</div>
         </div>
+        <div class="field field-full">
+          <label>Logo d'en-tête</label>
+          <input type="file" id="logoInput" accept="image/*" class="hidden">
+          <div id="logoPreviewWrap"><img id="logoPreview" class="sig-preview hidden" alt="Logo de l'en-tête"></div>
+          <div class="row-actions" style="margin-top:8px;">
+            <button type="button" class="btn btn-small" id="btnLogoUpload">Choisir une image</button>
+            <button type="button" class="btn btn-small btn-danger hidden" id="btnLogoRemove">Retirer</button>
+          </div>
+          <div class="helper">URPS Chirurgiens-Dentistes PACA et FSDL PACA ont déjà leur logo par défaut sur le PDF. Ajoute une image ici seulement pour un en-tête personnalisé, ou pour remplacer le logo par défaut.</div>
+        </div>
         <div class="field-full form-actions">
           <button type="submit" class="btn btn-primary" style="flex:0;">Enregistrer</button>
           <span id="profileSaved" class="helper hidden" style="align-self:center; color:var(--accent-strong); font-weight:600;">Enregistré ✓</span>
@@ -779,9 +789,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20260918s"></script>
-<script src="jspdf.autotable.min.js?v=20260918s"></script>
-<script src="config.js?v=20260918s"></script>
-<script src="app.js?v=20260918s"></script>
+<script src="jspdf.umd.min.js?v=20261001a"></script>
+<script src="jspdf.autotable.min.js?v=20261001a"></script>
+<script src="config.js?v=20261001a"></script>
+<script src="app.js?v=20261001a"></script>
 </body>
 </html>
