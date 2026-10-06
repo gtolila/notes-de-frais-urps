@@ -890,7 +890,13 @@
   }
   function defaultRecipientEmail() {
     var list = recipientsList();
-    return list[0] ? list[0].email : "";
+    var org = (state.profile.orgHeader || DEFAULT_PROFILE.orgHeader).toUpperCase();
+    var match = list.find(function (r) {
+      var key = (r.label || "").toUpperCase().split(/\s+/)[0];
+      return key && org.indexOf(key) === 0;
+    });
+    var chosen = match || list[0];
+    return chosen ? chosen.email : "";
   }
   function renderRecipients() {
     var list = document.getElementById("recipientList");
@@ -1330,6 +1336,7 @@
       opt.textContent = (r.label ? r.label + " — " : "") + r.email;
       select.appendChild(opt);
     });
+    select.value = defaultRecipientEmail();
 
     document.getElementById("emailSubject").value = subject;
     document.getElementById("emailBody").value = body;
