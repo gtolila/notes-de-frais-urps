@@ -664,21 +664,23 @@
   <!-- PROFIL -->
   <section id="tab-profil" class="tab-panel">
     <div class="card">
-      <h3 style="font-size:16px; margin-bottom:4px;">Informations personnelles</h3>
-      <p class="form-hint">Utilisées sur les notes de frais imprimées et dans l'email à l'URPS.</p>
+      <h3 style="font-size:16px; margin-bottom:4px;">Profil</h3>
+      <p class="form-hint">Utilisé sur les notes de frais imprimées et dans les emails.</p>
       <form id="profileForm" class="profile-grid">
         <div class="field field-full">
-          <label for="p-nom">Nom</label>
-          <input type="text" id="p-nom">
-        </div>
-        <div class="field field-full">
-          <label for="p-orgheader">En-tête (sous "Note de frais" sur le PDF)</label>
+          <label for="p-orgheader">Organisme destinataire (en-tête de la note de frais)</label>
           <select id="p-orgheader">
             <option value="URPS Chirurgiens-Dentistes PACA">URPS Chirurgiens-Dentistes PACA</option>
             <option value="FSDL PACA">FSDL PACA</option>
             <option value="__custom__">Autre…</option>
           </select>
           <input type="text" id="p-orgheader-custom" class="hidden" style="margin-top:8px;" placeholder="Nom de l'organisme">
+          <div class="helper">Organisme auquel tu envoies tes notes de frais : son nom figure en en-tête du PDF.</div>
+        </div>
+        <h3 class="field-full" style="font-size:14px; margin-top:6px;">Informations personnelles</h3>
+        <div class="field field-full">
+          <label for="p-nom">Nom</label>
+          <input type="text" id="p-nom">
         </div>
         <div class="field">
           <label for="p-adresse1">Adresse</label>
@@ -695,11 +697,11 @@
           <div class="field-row" style="margin-top:10px;">
             <div class="field">
               <label for="p-recipient-label">Nom</label>
-              <input type="text" id="p-recipient-label" placeholder="Secrétariat">
+              <input type="text" id="p-recipient-label">
             </div>
             <div class="field">
               <label for="p-recipient-email">Email</label>
-              <input type="email" id="p-recipient-email" placeholder="nom@urps-paca-chd.fr">
+              <input type="email" id="p-recipient-email">
             </div>
           </div>
           <button type="button" class="btn btn-small" id="btnAddRecipient" style="margin-top:2px;">+ Ajouter ce destinataire</button>
@@ -794,9 +796,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20261007a"></script>
-<script src="jspdf.autotable.min.js?v=20261007a"></script>
-<script src="config.js?v=20261007a"></script>
-<script src="app.js?v=20261007a"></script>
+<script src="jspdf.umd.min.js?v=20261007b"></script>
+<script src="jspdf.autotable.min.js?v=20261007b"></script>
+<script src="config.js?v=20261007b"></script>
+<script src="app.js?v=20261007b"></script>
 </body>
 </html>
