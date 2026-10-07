@@ -813,7 +813,17 @@
     if (isPreset) { orgSelect.value = orgHeader; orgCustom.classList.add("hidden"); orgCustom.value = ""; }
     else { orgSelect.value = "__custom__"; orgCustom.classList.remove("hidden"); orgCustom.value = orgHeader; }
   }
+  function profileIncomplete() {
+    return !(state.profile.nom || "").trim() || !(state.profile.adresse1 || "").trim();
+  }
+  function updateOnboardingBanner() {
+    document.getElementById("onboardingBanner").classList.toggle("hidden", !profileIncomplete());
+  }
+  document.getElementById("btnGoProfile").addEventListener("click", function () {
+    document.querySelector('.tab[data-tab="profil"]').click();
+  });
   function renderProfile() {
+    updateOnboardingBanner();
     document.getElementById("p-nom").value = state.profile.nom;
     document.getElementById("p-adresse1").value = state.profile.adresse1;
     document.getElementById("p-adresse2").value = state.profile.adresse2;
@@ -955,7 +965,7 @@
     };
     state.profile = p;
     state.selectedIds = {};
-    renderBrandHeader(); renderSaisie(); renderRecap();
+    renderBrandHeader(); renderSaisie(); renderRecap(); updateOnboardingBanner();
     saveProfile(p).then(function () {
       var saved = document.getElementById("profileSaved");
       saved.classList.remove("hidden");
@@ -1621,6 +1631,7 @@
       state.userId = user.id;
       document.getElementById("userEmail").textContent = user.email;
       await loadProfile();
+      if (profileIncomplete()) document.querySelector('.tab[data-tab="profil"]').click();
       if (!state.profile.isApproved && !state.profile.isAdmin) {
         showPendingScreen();
         return;
