@@ -286,6 +286,8 @@
   .btn-small { padding: 6px 10px; font-size: 12px; }
   .btn-danger { color: var(--danger); }
   .attach-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media not all and (any-pointer: coarse) { .scan-touch-only { display: none !important; } }
+  @media (any-pointer: coarse) { .scan-desktop-only { display: none !important; } }
 
   /* ---------- table ---------- */
   .table-card { padding: 0; overflow: hidden; }
@@ -560,9 +562,10 @@
           <input type="file" id="scanInput" accept="image/*" capture="environment" class="hidden">
           <div class="attach-btn-row">
             <button type="button" class="btn btn-small" id="btnAttach">📎 Ajouter (photo ou fichier)</button>
-            <button type="button" class="btn btn-small" id="btnScan">📷 Scanner avec mon iPhone</button>
+            <button type="button" class="btn btn-small scan-touch-only" id="btnScan">📷 Scanner avec mon iPhone</button>
           </div>
-          <div class="helper">Pour scanner : dans l'appareil photo, touche l'icône de scan en bas pour détourer automatiquement le document.</div>
+          <div class="helper scan-touch-only">Pour scanner : dans l'appareil photo, touche l'icône de scan en bas pour détourer automatiquement le document.</div>
+          <div class="helper scan-desktop-only">Pour scanner un document avec l'appareil photo, ouvre notedefrais.app sur ton iPhone. Sur ordinateur, « Ajouter » ouvre le Finder pour choisir un fichier.</div>
           <div class="helper" id="receiptStatus"></div>
           <div class="receipt-list" id="receiptList"></div>
         </div>
@@ -796,9 +799,9 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="jspdf.umd.min.js?v=20261007b"></script>
-<script src="jspdf.autotable.min.js?v=20261007b"></script>
-<script src="config.js?v=20261007b"></script>
-<script src="app.js?v=20261007b"></script>
+<script src="jspdf.umd.min.js?v=20261017a"></script>
+<script src="jspdf.autotable.min.js?v=20261017a"></script>
+<script src="config.js?v=20261017a"></script>
+<script src="app.js?v=20261017a"></script>
 </body>
 </html>
